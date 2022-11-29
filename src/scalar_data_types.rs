@@ -12,14 +12,33 @@ fn declare_signed_integers() {
 
 fn declare_float() {
     let x: f32 = 2.07; // declaring a floating point number
+    // available as f32 & f64
     print!("Our number is....{}.", {x})
 }
 
+fn declare_bool() {
+    let x: bool = true; // declaring a floating point number
+    let not_equal: bool = x != 15;
+    // available as f32 & f64
+    print!("Our value is....{}.", {not_equal})
+}
+
+fn declare_string() {
+    let x: str = "example string"; // declaring a floating point number
+    // available as f32 & f64
+    print!("Our value is....{}.", {x})
+}
+
 fn get_max_size_for_scalars() {
-    print!("Our number is....{}.", {std::u8::MAX});
-    print!("Our number is....{}.", {std::i8::MAX});
+    print!("Our max possible number is....{}.", {std::u8::MAX});
+    print!("Our max possiblenumber is....{}.", {std::i8::MAX});
+    print!("Our  max possible number is....{}.", {std::f32::MAX});
 }
 
 fn main() {
     declare_unsigned_integers();
+    declare_signed_integers();
+    declare_float();
+    declare_bool();
+    get_max_size_for_scalars();
 }
