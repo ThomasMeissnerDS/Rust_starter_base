@@ -1,3 +1,5 @@
+mod declare_variables;
+
 use std::env;
 
 fn main() {
