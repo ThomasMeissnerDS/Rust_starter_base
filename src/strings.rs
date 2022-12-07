@@ -35,10 +35,21 @@ fn strings() {
     // we can also convert other data types to string
     a_char: char = "a";
     let a_string: Str = a_char.to_string();
-    println!("We have a string");
+    println!("We have a string with {}", a_string);
 
     // We can also just convert a string on the fly
-    fly_string: Str = "On the fly".to_string();
+    let fly_string: Str = "On the fly".to_string();
+    println!("We have a string with {}", fly_string);
+
+    // we cana lso create empty strings
+    let empty_string: Str = String::new();
+    println!("We have a string with len {}", empty_string.len());
+
+    // we can combvine strings
+    let first_string: Str = "First";
+    let second_string: Str = "Second";
+    let full_string: Str = format!("Concatenating {} and {} string", first_string, second_string);
+    println!("We have a string with {}", full_string);
 
 
 }
