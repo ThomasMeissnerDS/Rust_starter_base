@@ -11,6 +11,9 @@ fn tuples() {
     // we can also nest tuples
     let nested_tuple = (4.0, 3, ("My", "Pet"));
     let element: &str = nested_tuple.2.0; // accessing the element of a nested tuple
+
+    // we can also create empty tuples
+    let empty_tuple = ();
 }
 
 fn main() {
