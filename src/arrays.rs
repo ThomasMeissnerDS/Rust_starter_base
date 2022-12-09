@@ -32,5 +32,5 @@ fn arrays() {
 }
 
 fn main() {
-    tuples()
+    arrays()
 }
