@@ -13,4 +13,3 @@ fn main() {
 fn basic_fn() {
     println!("This is a basic function.")
 }
-
