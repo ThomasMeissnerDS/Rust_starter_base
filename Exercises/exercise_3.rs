@@ -32,11 +32,10 @@ println!("The distance of the point from the origin is {}", print_distance((5.0,
  */
 
 fn print_distance(point: (f32, f32)) -> f32 {
-
-};
-
-// your code here
+    let (x, y): (f32, f32) = point;
+    (x.powf(2.0) + y.powf(2.0)).sqrt()
+}
 
 fn main() {
-
-    println!("The distance of the point from the origin is {}", print_distance((5.0,4.0)));
+    println!("The distance of the point from the origin is {}", print_distance((5.0, 4.0)))
+}

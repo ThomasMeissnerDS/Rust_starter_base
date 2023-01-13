@@ -1,32 +1,41 @@
 /*
-Rewrite the main function in a way so that there is no variable in it and
-it performs the same job as this program. Your program should make calls to both
-the functions in this program.
+Write a function which will accept a tuple called point representing the x-axis and y-axis
+coordinates of a point. The function will compute the distance of the point from the origin and
+will return the computed distance.
 
-fn double(x: i32) -> i32 {
-    x * 2
+The template of the function is given below
+
+fn print_distance(point: (f32, f32)) -> f32 {
+
+// your code here
+
 }
 
-fn triple(x: i32) -> i32 {
-    x * 3
-}
+Inside the function, first destructure the tuple into (x,y). This provides a better readability
+instead of using point.0 and point.1. Next compute the distance from the original using the formula
+ of √(x − 0)2 + (y − 0)2.  you may consider using the following two functions 1).  x.powf(2.0) for
+ computing the square of the number x. 2). x.sqrt() which will compute the square root of a number x.
+
+
+Test the program with the following main program
+
 
 fn main() {
-    let x = triple(double(5));
-    let y = triple(x);
-    println!("Answer: {}", y);
 
-}
+println!("The distance of the point from the origin is {}", print_distance((5.0,4.0)));
+
+// Note: we need to enclose the inputs to the function in double paranthesis, i.e., print_distance((5.0,4.0)).
+
+// This is becuase a single paranthesis will mean two inputs of 5.0 and 4.0 and since the function has one
+
+// input which is a single tuple therefore the compiler will complain.  }
  */
-fn double(x: i32) -> i32 {
-    x * 2
-}
 
-fn triple(x: i32) -> i32 {
-    x * 3
+fn print_distance(point: (f32, f32)) -> f32 {
+    let (x, y): (f32, f32) = point;
+    (x.powf(2.0) + y.powf(2.0)).sqrt()
 }
 
 fn main() {
-    println!("Answer: {}", triple(triple(double(5))));
-
+    println!("The distance of the point from the origin is {}", print_distance((5.0, 4.0)))
 }
