@@ -27,3 +27,4 @@ fn divide(a: i32, b: i32) -> Res<i32, String> {
     }
     Res::Thing(a / b)
 }
+
