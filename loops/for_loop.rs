@@ -1,7 +1,10 @@
 fn main() {
     let mut n = 0;
-    for _i in 0..10 {
+    loop {
         n += 1;
+        if n > 10 {
+            break
+        }
         println!("Number is {}", n)
     }
 
