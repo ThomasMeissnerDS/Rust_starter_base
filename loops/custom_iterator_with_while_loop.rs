@@ -18,10 +18,9 @@ impl Iterator for Stepper {  /*Impl gives functionality to an object*/
 }
 
 fn main() {
-    let st = Stepper{curr: 35, step: 2, max: 96};
-
-    for i in st {
-        println!("We are at {}.", i) // could also be replaced by st.curr in the print
+    let mut st = Stepper{curr: 35, step: 2, max: 96};
+    while let Some(n) =  st.next() {
+        println!("We are at {}.", n) // could also be replaced by st.curr in the print
     }
 
     println!("All done");
