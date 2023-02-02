@@ -36,7 +36,7 @@ fn main() {
     for i in 0..105 {
         v.push(i.to_string())
     }
-    println!("Vector with length {} and capacity of {}.", v.len(), v.capacity()); // capacity is 200 here now (vecs usually store 2 times of what they need)
+    println!("Vector with length {} and capacity of {}", v.len(), v.capacity()); // capacity is 200 here now (vecs usually store 2 times of what they need)
     // when we exceeded 100 it had to occupy and even bigger place in memory, copy all values into there and then add the new element
 
 }
