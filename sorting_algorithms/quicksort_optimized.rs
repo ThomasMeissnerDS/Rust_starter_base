@@ -28,7 +28,7 @@ impl RandGen {
 }
 
 pub fn rand(max: usize) -> usize{
-    RG.lock().unwrap().next_v().max();
+    RG.lock().unwrap().next_v().max() // when this closes the lock on Mutex will be released
 }
 
 // this still needs almost O(n^2) operations
