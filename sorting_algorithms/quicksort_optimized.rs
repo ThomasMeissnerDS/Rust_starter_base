@@ -96,7 +96,7 @@ pub fn merge_sort <T:PartialOrd + Debug> (mut v: Vec<T>) -> Vec<T>{
 
 }
 // if the list is already sorted then we hav O(n^2) complexity suddenly
-pub fn pivot <T:PartialOrd> (&mut v: [T]) -> usize{ // result is final position of our pivot
+pub fn pivot <T:PartialOrd> (&mut v: [T]) -> usize{ // result is final position of our pivot.
     let mut p = b_rand::rand(v.len());
     v.swap(p, 0);
     p = 0;
