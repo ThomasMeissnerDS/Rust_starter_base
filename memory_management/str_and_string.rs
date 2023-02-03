@@ -7,7 +7,7 @@ pub struct LinkedList <T> {
 }
 
 impl <T:std::ops::AddAssign> LinkedList<T> { // enables us to do plus-equals operations as we are dealing with type T
-    pub fn add_up(&mut self, n:T) {
+pub fn add_up(&mut self, n:T) {
     self.data += n
 }
 
