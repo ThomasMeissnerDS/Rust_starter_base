@@ -1,42 +1,50 @@
-use std::time::Instant;
+/*
+Script that reads a csv in a loop. Takes a column and counts the number of distinct values within
+that column. Accepts two arguments:
+- the column name that shall be counted
+- path to the csv file (has to include .csv)
+ */
 use::std::collections::HashMap;
-use std::{error::Error, io, process};
-use std::fs::File;
-use csv::Reader;
+use std::env;
+use csv::ReaderBuilder;
 use csv::Error;
 
+fn main() -> Result<(), Error> {
+    // get command line arguments
+    let args: Vec<String> = env::args().collect();
+    let count_col = String::from(&args[1]);
+    let csv = String::from(&args[2]);
 
+    let mut col_indices: HashMap<String, usize> = HashMap::new();
+    let mut col_counts: HashMap<String, u32> = HashMap::new();
 
-// 1) accept an argument with file path to csv + 2) argument for column name to count
+    let mut reader = ReaderBuilder::new()
+        .flexible(true)
+        .has_headers(false)
+        .from_path(csv)?;
+    let mut row_idx: u32 = 0;
+    let mut nb_columns: usize;
 
-// hashmap to store the counts
-
-// loop through csv
-// logic for the header
-// delimit/split each row
-// get context of target columns
-
-// return the length of key
-
-
-fn main() -> Result<(), dyn Error> {
-    let csv = "year,make,model,description
-        1948,Porsche,356,Luxury sports car
-        1967,Ford,Mustang fastback 1967,American car";
-
-    let mut reader = csv::Reader::from_reader(csv.as_bytes());
     for record in reader.records() {
         let record = record?;
-        //let nb_cols = record.len();
-        //println!("Nb columns is {}", nb_cols);
-        println!(
-            "In {}, {} built the {} model. It is a {}.",
-            &record[0],
-            &record[1],
-            &record[2],
-            &record[3]
-        );
-    }
+        // get the header
+        if row_idx == 0 {
+            nb_columns = record.len();
+            // loop through columns..map column_name to column_index in hashmap
+            for idx in 0..nb_columns {
+                let temp_str = String::from(&record[idx]); // convert to String to be able to deep copy
+                col_indices.insert(temp_str, idx); // hashmap takes ownership
+            }
+        }
+        // get all rows except header
+        else {
+            let temp_str = String::from(&record[*col_indices.get(&count_col).unwrap()]); // convert to String to be able to deep copy
+            *col_counts.entry(temp_str.to_owned()).or_default() += 1;
 
+        }
+
+        row_idx += 1;
+    }
+    println!("The distinct number of {} categories is {}", count_col, col_counts.keys().len());
     Ok(())
 }
