@@ -1,6 +1,5 @@
 /*
-Script that reads a csv in a loop. Takes a column and counts the number of distinct values within
-that column. Accepts three arguments:
+WORK IN PROGRESS
 - the column to groupby on
 - the column name that shall be counted
 - path to the csv file (has to include .csv)
