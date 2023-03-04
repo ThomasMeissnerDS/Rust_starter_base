@@ -32,6 +32,14 @@ fn vectors() {
     // check if certain value exists in vector
     println!("Does 500 exist? - {}", my_vector.contains(&500)); // & is used because function requires a reference to a number!
 
+    // loop through vector using enumerate
+    let v: Vec<u32> = vec![3, 4, 5];
+    let mut res_vec: Vec<u32> = vec![];
+    for (_idx, val) in v.iter().enumerate() {
+        res_vec.push(val*3);
+    }
+    println!("{:?}", res_vec)
+
 }
 
 fn main() {

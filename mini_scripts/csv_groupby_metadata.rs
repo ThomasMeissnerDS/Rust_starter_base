@@ -39,6 +39,7 @@ fn main() {
     for (group_val, (count, sum, values)) in counts {
         let mean = if count == 0 { Decimal::new(0, 0) } else { sum / Decimal::new(count, 0) };
         let distinct_count = values.len();
+        println!("Group, count, sum, mean, nb unique");
         println!("{},{},{},{},{}", group_val, count, sum, mean, distinct_count);
     }
 }
