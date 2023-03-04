@@ -8,10 +8,8 @@ use::std::collections::HashMap;
 use std::env;
 use csv::ReaderBuilder;
 use csv::Error;
-use std::time::Instant;
 
 fn main() -> Result<(), Error> {
-let now = Instant::now();
     // get command line arguments
     let args: Vec<String> = env::args().collect();
     let count_col = String::from(&args[1]);
@@ -62,7 +60,5 @@ let now = Instant::now();
         row_idx += 1;
     }
     println!("The distinct number of {} categories is {}", count_col, distinct_vals);
-    let elapsed = now.elapsed();
-    println!("Elapsed: {:.2?}", elapsed);
     Ok(())
 }
