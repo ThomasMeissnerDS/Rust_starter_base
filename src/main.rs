@@ -1,14 +1,17 @@
+use rust_decimal_macros::dec;
 use rust_decimal::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
+
 fn main() {
     // Parse command line arguments
     let groupby_col = &env::args().nth(1).expect("groupby_col not provided");
     let count_col = &env::args().nth(2).expect("count_col not provided");
     let filename = &env::args().nth(3).expect("file_name not provided");
+
 
     // Read CSV file
     let file = File::open(filename).expect("Could not open file");
@@ -21,6 +24,8 @@ fn main() {
     let mut col_indices = HashMap::new();
     col_indices.insert(groupby_col, headers.iter().position(|&x| x == groupby_col).unwrap());
     col_indices.insert(count_col, headers.iter().position(|&x| x == count_col).unwrap());
+
+    // Iterate 1st time through rows to get meta data of reference categories of zscores
 
     // Loop through remaining rows and accumulate counts, sum, and distinct values for each group
     let mut counts = HashMap::new();
@@ -35,11 +40,33 @@ fn main() {
         values.insert(col_val);
     }
 
-    // Print group, count, sum, mean, and distinct count pairs
-    for (group_val, (count, sum, values)) in counts {
-        let mean = if count == 0 { Decimal::new(0, 0) } else { sum / Decimal::new(count, 0) };
-        let distinct_count = values.len();
-        println!("Group, count, sum, mean, nb unique");
-        println!("{},{},{},{},{}", group_val, count, sum, mean, distinct_count);
+    //println!("{:?}", &counts);
+
+    // Iterate 2nd time through rows to get standard deviation of reference categories of zscores
+    let file = File::open(filename).expect("Could not open file");
+    let reader = BufReader::new(file);
+    let mut lines = reader.lines();
+
+    let mut stds:HashMap<String, rust_decimal::Decimal> = HashMap::new();
+    for line in lines {
+        let record = line.unwrap();
+        let record: Vec<&str> = record.split(',').collect();
+        let group_val = record[*col_indices.get(groupby_col).unwrap()].to_string();
+        //println!("{}", &group_val);
+        let col_val = Decimal::from_str(record[*col_indices.get(count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
+
+        let group_hash = counts.get(&group_val);
+        match group_hash {
+            Some(value) => {
+                let sum: f64 = value.0 as f64;
+                let from_string = Decimal::from_str(&sum.to_string());
+                let mean = value.1 / from_string.unwrap();
+                stds.insert(String::from(group_val), col_val - mean);
+            }
+            _ => {
+                {};
+            }
+        }
+
     }
 }

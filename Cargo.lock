@@ -621,6 +621,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rust_decimal_macros"
+version = "1.28.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f79c1532c5088b44236d74c7dd9d80a1c57a433e02694fced7b5a670dc562ce5"
+dependencies = [
+ "quote",
+ "rust_decimal",
+]
+
+[[package]]
 name = "rust_starter"
 version = "0.1.0"
 dependencies = [
@@ -631,6 +641,7 @@ dependencies = [
  "rand 0.4.6",
  "rayon",
  "rust_decimal",
+ "rust_decimal_macros",
 ]
 
 [[package]]

@@ -13,3 +13,4 @@ fnv = "1.0"
 flurry = "0.3.1"
 csv = "1.1" # for csv project
 rust_decimal = "1.10.0"
+rust_decimal_macros = "1.28"
