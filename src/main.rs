@@ -1,44 +1,64 @@
-use rust_decimal::prelude::*;
-use std::collections::{HashMap, HashSet};
+/*
+Script that reads a csv in a loop. Takes a column and counts the number of distinct values within
+that column. Accepts two arguments:
+- the column name that shall be counted
+- path to the csv file (has to include .csv)
+ */
+use::std::collections::HashMap;
 use std::env;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use csv::ReaderBuilder;
+use csv::Error;
 
-fn main() {
-    // Parse command line arguments
-    let groupby_col = &env::args().nth(1).expect("groupby_col not provided");
-    let count_col = &env::args().nth(2).expect("count_col not provided");
-    let filename = &env::args().nth(3).expect("file_name not provided");
+fn main() -> Result<(), Error> {
+    // get command line arguments
+    let args: Vec<String> = env::args().collect();
+    let count_col = String::from(&args[1]);
+    let csv = String::from(&args[2]);
 
-    // Read CSV file
-    let file = File::open(filename).expect("Could not open file");
-    let reader = BufReader::new(file);
-    let mut lines = reader.lines();
+    let mut col_indices: HashMap<String, usize> = HashMap::new();
+    let mut col_counts: HashMap<String, u32> = HashMap::new();
 
-    // Get header row and determine column indices for groupby and count columns
-    let header_row = lines.next().unwrap().unwrap();
-    let headers: Vec<&str> = header_row.split(',').collect();
-    let mut col_indices = HashMap::new();
-    col_indices.insert(groupby_col, headers.iter().position(|&x| x == groupby_col).unwrap());
-    col_indices.insert(count_col, headers.iter().position(|&x| x == count_col).unwrap());
+    let mut reader = ReaderBuilder::new()
+        .flexible(true)
+        .has_headers(false)
+        .from_path(csv)?;
 
-    // Loop through remaining rows and accumulate counts, sum, and distinct values for each group
-    let mut counts = HashMap::new();
-    for line in lines {
-        let record = line.unwrap();
-        let record: Vec<&str> = record.split(',').collect();
-        let group_val = record[*col_indices.get(groupby_col).unwrap()].to_string();
-        let col_val = Decimal::from_str(record[*col_indices.get(count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
-        let (count, sum, values) = counts.entry(group_val.clone()).or_insert((0, Decimal::new(0, 0), HashSet::new()));
-        *count += 1;
-        *sum += col_val;
-        values.insert(col_val);
+    let mut nb_columns: usize;
+
+    let mut row_idx: u32 = 0;
+    let mut distinct_vals: u32 = 0;
+
+    for record in reader.records() {
+        let record = record?;
+        // get the header
+        match row_idx {
+            0 => {
+            nb_columns = record.len();
+            // loop through columns..map column_name to column_index in hashmap
+            for idx in 0..nb_columns {
+                let temp_str = String::from(&record[idx]); // convert to String to be able to deep copy
+                col_indices.insert(temp_str, idx); // hashmap takes ownership
+                }
+            }
+            _ => {
+            let temp_str = String::from(&record[*col_indices.get(&count_col).unwrap()]); // convert to String to be able to deep copy
+            let exists = col_counts.get(&temp_str);
+
+            match exists {
+                Some(_value) => {
+                 *col_counts.entry(temp_str.to_owned()).or_default() += 1;
+                }
+                _ => {
+                *col_counts.entry(temp_str.to_owned()).or_default() += 1;
+                distinct_vals += 1;
+                }
+            }
+
+            }
+        }
+        // get all rows except header
+        row_idx += 1;
     }
-
-    // Print group, count, sum, mean, and distinct count pairs
-    for (group_val, (count, sum, values)) in counts {
-        let mean = if count == 0 { Decimal::new(0, 0) } else { sum / Decimal::new(count, 0) };
-        let distinct_count = values.len();
-        println!("{},{},{},{},{}", group_val, count, sum, mean, distinct_count);
-    }
+    println!("The distinct number of {} categories is {}", count_col, distinct_vals);
+    Ok(())
 }
