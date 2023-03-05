@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::convert::TryFrom;
 
 
 fn main() {
@@ -47,7 +48,7 @@ fn main() {
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
 
-    let mut stds:HashMap<String, f64> = HashMap::new();
+    let mut deltas:HashMap<String, f64> = HashMap::new();
     for line in lines {
         let record = line.unwrap();
         let record: Vec<&str> = record.split(',').collect();
@@ -58,14 +59,23 @@ fn main() {
         let group_hash = counts.get(&group_val);
         match group_hash {
             Some(value) => {
-                let sum: f64 = value.0 as f64;
-                let mean = sum / value.1.to_f64().unwrap();
-                *stds.entry(String::from(group_val).to_owned()).or_default() += (col_val.to_f64().unwrap() - mean).powf(2.0);
+            // calculate total of deltas from individual values to group mean
+                let sum: f64 = value.1.to_f64().unwrap();
+                let mean = sum / value.0 as f64;
+                *deltas.entry(String::from(group_val).to_owned()).or_default() += (col_val.to_f64().unwrap() - mean).powf(2.0);
             }
             _ => {
                 {};
             }
         }
-
     }
+    // convert total distances to mean to standard deviation
+    let mut stds: HashMap<String, f64> = HashMap::new();
+
+    for (key, value) in deltas.into_iter() {
+    println!("{:?}",  &counts.get(&key).unwrap().2.len());
+        let nb_unique = &counts.get(&key).unwrap().2.len();
+        *stds.entry(String::from(key).to_owned()).or_default() += value / (*nb_unique as f64);
+    }
+    println!("{:?}", &stds)
 }
