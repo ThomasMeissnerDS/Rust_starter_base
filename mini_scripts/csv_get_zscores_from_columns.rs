@@ -47,7 +47,7 @@ fn main() {
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
 
-    let mut deltas:HashMap<String, f64> = HashMap::new();
+    let mut stds:HashMap<String, f64> = HashMap::new();
     for line in lines {
         let record = line.unwrap();
         let record: Vec<&str> = record.split(',').collect();
@@ -58,20 +58,14 @@ fn main() {
         let group_hash = counts.get(&group_val);
         match group_hash {
             Some(value) => {
-            // calculate total of deltas from individual values to group mean
                 let sum: f64 = value.0 as f64;
                 let mean = sum / value.1.to_f64().unwrap();
-                *deltas.entry(String::from(group_val).to_owned()).or_default() += (col_val.to_f64().unwrap() - mean).powf(2.0);
+                *stds.entry(String::from(group_val).to_owned()).or_default() += (col_val.to_f64().unwrap() - mean).powf(2.0);
             }
             _ => {
                 {};
             }
         }
+
     }
-    // convert total distances to mean to standard deviation
-    let mut zscores: HashMap<String, f64> = HashMap::new();
-    for (key, value) in stds.into_iter() {
-        *zscores.entry(String::from(key).to_owned()).or_default() += value / counts.get(&key).unwrap().length();
-    }
-    println!("{:?}", &zscores)
 }
