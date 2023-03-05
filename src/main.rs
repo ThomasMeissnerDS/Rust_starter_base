@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::convert::TryFrom;
 
 
 fn main() {
@@ -59,8 +60,8 @@ fn main() {
         match group_hash {
             Some(value) => {
             // calculate total of deltas from individual values to group mean
-                let sum: f64 = value.0 as f64;
-                let mean = sum / value.1.to_f64().unwrap();
+                let sum: f64 = value.1.to_f64().unwrap();
+                let mean = sum / value.0 as f64;
                 *deltas.entry(String::from(group_val).to_owned()).or_default() += (col_val.to_f64().unwrap() - mean).powf(2.0);
             }
             _ => {
@@ -69,9 +70,12 @@ fn main() {
         }
     }
     // convert total distances to mean to standard deviation
-    let mut zscores: HashMap<String, f64> = HashMap::new();
-    for (key, value) in stds.into_iter() {
-        *zscores.entry(String::from(key).to_owned()).or_default() += value / counts.get(&key).unwrap().length();
+    let mut stds: HashMap<String, f64> = HashMap::new();
+
+    for (key, value) in deltas.into_iter() {
+    println!("{:?}",  &counts.get(&key).unwrap().2.len());
+        let nb_unique = &counts.get(&key).unwrap().2.len();
+        *stds.entry(String::from(key).to_owned()).or_default() += value / (*nb_unique as f64);
     }
-    println!("{:?}", &zscores)
+    println!("{:?}", &stds)
 }
