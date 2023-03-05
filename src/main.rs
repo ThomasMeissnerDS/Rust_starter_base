@@ -47,7 +47,7 @@ fn main() {
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
 
-    let mut stds:HashMap<String, rust_decimal::Decimal> = HashMap::new();
+    let mut stds:HashMap<String, f64> = HashMap::new();
     for line in lines {
         let record = line.unwrap();
         let record: Vec<&str> = record.split(',').collect();
@@ -61,7 +61,7 @@ fn main() {
                 let sum: f64 = value.0 as f64;
                 let from_string = Decimal::from_str(&sum.to_string());
                 let mean = value.1 / from_string.unwrap();
-                stds.insert(String::from(group_val), col_val - mean);
+                stds.insert(String::from(group_val), (col_val - mean).to_f64().unwrap().powf(2.0));
             }
             _ => {
                 {};
