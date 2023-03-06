@@ -7,6 +7,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::fs::OpenOptions;
+use std::time::Instant;
 
 
 fn write_to_file_header(path: &str, groupby_col: &str, count_col: String) -> Result<(), Box<dyn Error>> {
@@ -53,6 +54,7 @@ fn write_to_file_row(path: &str, groupby_col: &str, count_col: String, zscore: S
 
 
 fn main() {
+let now = Instant::now();
     // Parse command line arguments
     let groupby_col = &env::args().nth(1).expect("groupby_col not provided");
     let count_col = &env::args().nth(2).expect("count_col not provided");
@@ -119,11 +121,12 @@ fn main() {
     let mut stds: HashMap<String, f64> = HashMap::new();
 
     for (key, value) in deltas.into_iter() {
-    println!("{:?}",  &counts.get(&key).unwrap().2.len());
-        let nb_unique = &counts.get(&key).unwrap().2.len();
+        let nb_unique = &counts.get(&key).unwrap().0;
         *stds.entry(String::from(key).to_owned()).or_default() += value / (*nb_unique as f64);
     }
-    println!("{:?}", &stds);
+
+    let elapsed = now.elapsed();
+    println!("Elapsed: {:.2?}", elapsed);
 
     // create results csv with header only
     write_to_file_header(&result_filename, &groupby_col,(&count_col).to_string());
@@ -157,4 +160,6 @@ fn main() {
         }
 
     }
+    let elapsed = now.elapsed();
+            println!("Elapsed: {:.2?}", elapsed);
 }
