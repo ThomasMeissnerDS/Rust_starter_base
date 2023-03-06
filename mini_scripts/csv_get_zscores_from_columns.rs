@@ -4,7 +4,6 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::convert::TryFrom;
 
 
 fn main() {
@@ -33,7 +32,7 @@ fn main() {
     for line in lines {
         let record = line.unwrap();
         let record: Vec<&str> = record.split(',').collect();
-        let group_val = record[*col_indices.get(groupby_col).unwrap()].to_string();
+        let group_val = record[*col_indices.get(groupby_col).unwrap()].to_string();  // TODO: ADD match statement
         let col_val = Decimal::from_str(record[*col_indices.get(count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
         let (count, sum, values) = counts.entry(group_val.clone()).or_insert((0, Decimal::new(0, 0), HashSet::new()));
         *count += 1;
