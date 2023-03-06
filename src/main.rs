@@ -6,6 +6,7 @@ use std::env;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::fs::OpenOptions;
 
 
 fn write_to_file_header(path: &str, groupby_col: &str, count_col: String) -> Result<(), Box<dyn Error>> {
@@ -27,14 +28,20 @@ fn write_to_file_header(path: &str, groupby_col: &str, count_col: String) -> Res
 }
 
 fn write_to_file_row(path: &str, groupby_col: &str, count_col: String, zscore: String) -> Result<(), Box<dyn Error>> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .append(true)
+        .open(path)
+        .unwrap();
     // Creates new `Writer` for `stdout`
-    let mut writer = csv::Writer::from_path(path)?;
+    let mut writer = csv::Writer::from_writer(file);
 
     // Write records one at a time including the header record.
     writer.write_record(&[
         groupby_col,
         &count_col,
-        &format!("{}_zscore", &count_col),
+        &zscore,
     ])?;
 
     // A CSV writer maintains an internal buffer, so it's important
@@ -141,12 +148,13 @@ fn main() {
                 let mean = sum / value.0 as f64;
                 let std = stds.get(&group_val);
                 zscore = (col_val.to_f64().unwrap() - mean) / std.unwrap();
+                let zscore_str: String = zscore.to_string();
+                write_to_file_row(&result_filename, &groupby_col, (&count_col).to_string(), zscore_str);
             }
             _ => {
                 {};
             }
         }
-        let zscore_str: String = zscore.to_string();
-        write_to_file_row(&result_filename, &groupby_col, (&count_col).to_string(), zscore_str);
+
     }
 }
