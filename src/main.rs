@@ -1,5 +1,4 @@
 use csv;
-use rust_decimal_macros::dec;
 use rust_decimal::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -109,7 +108,8 @@ let now = Instant::now();
             Some(value) => {
             // calculate total of deltas from individual values to group mean
                 let sum: f64 = value.1.to_f64().unwrap();
-                let mean = sum / value.0 as f64;
+                let counts: f64 =  value.0 as f64;
+                let mean = sum / counts;
                 *deltas.entry(String::from(group_val).to_owned()).or_default() += (col_val.to_f64().unwrap() - mean).powf(2.0);
             }
             _ => {
@@ -122,8 +122,10 @@ let now = Instant::now();
 
     for (key, value) in deltas.into_iter() {
         let nb_unique = &counts.get(&key).unwrap().0;
-        *stds.entry(String::from(key).to_owned()).or_default() += value / (*nb_unique as f64);
+        *stds.entry(String::from(key).to_owned()).or_default() += (value / (*nb_unique as f64)).sqrt();
     }
+
+    println!("{:?}", stds);
 
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
@@ -135,6 +137,15 @@ let now = Instant::now();
     let file = File::open(filename).expect("Could not open file");
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
+
+    let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .append(true)
+            .open(&result_filename)
+            .unwrap();
+
+    let mut writer = csv::Writer::from_writer(file);
 
     for line in lines {
         let record = line.unwrap();
@@ -152,7 +163,11 @@ let now = Instant::now();
                 let std = stds.get(&group_val);
                 zscore = (col_val.to_f64().unwrap() - mean) / std.unwrap();
                 let zscore_str: String = zscore.to_string();
-                write_to_file_row(&result_filename, &groupby_col, (&count_col).to_string(), zscore_str);
+                writer.write_record(&[
+                        &groupby_col,
+                        &count_col,
+                        &zscore_str,
+                    ]);
             }
             _ => {
                 {};
@@ -160,6 +175,7 @@ let now = Instant::now();
         }
 
     }
+    writer.flush();
     let elapsed = now.elapsed();
             println!("Elapsed: {:.2?}", elapsed);
 }

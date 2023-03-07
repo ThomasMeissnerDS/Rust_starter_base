@@ -121,7 +121,7 @@ fn main() {
     for (key, value) in deltas.into_iter() {
     println!("{:?}",  &counts.get(&key).unwrap().2.len());
         let nb_unique = &counts.get(&key).unwrap().0;
-        *stds.entry(String::from(key).to_owned()).or_default() += value / (*nb_unique as f64);
+        *stds.entry(String::from(key).to_owned()).or_default() += (value / (*nb_unique as f64)).sqrt();
     }
     println!("{:?}", &stds);
 
