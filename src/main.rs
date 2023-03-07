@@ -82,10 +82,10 @@ let now = Instant::now();
         let record: Vec<&str> = record.split(',').collect();
         let group_val = record[*col_indices.get(groupby_col).unwrap()].to_string();  // TODO: ADD match statement
         let col_val = Decimal::from_str(record[*col_indices.get(count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
-        let (count, sum, values) = counts.entry(group_val.clone()).or_insert((0, Decimal::new(0, 0), HashSet::new()));
+        let (count, sum) = counts.entry(group_val.clone()).or_insert((0, Decimal::new(0, 0)));
         *count += 1;
         *sum += col_val;
-        values.insert(col_val);
+
     }
 
     //println!("{:?}", &counts);

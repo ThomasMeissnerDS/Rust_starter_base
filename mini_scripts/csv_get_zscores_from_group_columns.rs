@@ -1,5 +1,4 @@
 use csv;
-use rust_decimal_macros::dec;
 use rust_decimal::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -7,6 +6,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::fs::OpenOptions;
+use std::time::Instant;
 
 
 fn write_to_file_header(path: &str, groupby_col: &str, count_col: String) -> Result<(), Box<dyn Error>> {
@@ -53,6 +53,7 @@ fn write_to_file_row(path: &str, groupby_col: &str, count_col: String, zscore: S
 
 
 fn main() {
+let now = Instant::now();
     // Parse command line arguments
     let groupby_col = &env::args().nth(1).expect("groupby_col not provided");
     let count_col = &env::args().nth(2).expect("count_col not provided");
@@ -107,7 +108,8 @@ fn main() {
             Some(value) => {
             // calculate total of deltas from individual values to group mean
                 let sum: f64 = value.1.to_f64().unwrap();
-                let mean = sum / value.0 as f64;
+                let counts: f64 =  value.0 as f64;
+                let mean = sum / counts;
                 *deltas.entry(String::from(group_val).to_owned()).or_default() += (col_val.to_f64().unwrap() - mean).powf(2.0);
             }
             _ => {
@@ -119,11 +121,14 @@ fn main() {
     let mut stds: HashMap<String, f64> = HashMap::new();
 
     for (key, value) in deltas.into_iter() {
-    println!("{:?}",  &counts.get(&key).unwrap().2.len());
         let nb_unique = &counts.get(&key).unwrap().0;
         *stds.entry(String::from(key).to_owned()).or_default() += (value / (*nb_unique as f64)).sqrt();
     }
-    println!("{:?}", &stds);
+
+    println!("{:?}", stds);
+
+    let elapsed = now.elapsed();
+    println!("Elapsed: {:.2?}", elapsed);
 
     // create results csv with header only
     write_to_file_header(&result_filename, &groupby_col,(&count_col).to_string());
@@ -132,6 +137,15 @@ fn main() {
     let file = File::open(filename).expect("Could not open file");
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
+
+    let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .append(true)
+            .open(&result_filename)
+            .unwrap();
+
+    let mut writer = csv::Writer::from_writer(file);
 
     for line in lines {
         let record = line.unwrap();
@@ -149,7 +163,11 @@ fn main() {
                 let std = stds.get(&group_val);
                 zscore = (col_val.to_f64().unwrap() - mean) / std.unwrap();
                 let zscore_str: String = zscore.to_string();
-                write_to_file_row(&result_filename, &groupby_col, (&count_col).to_string(), zscore_str);
+                writer.write_record(&[
+                        &groupby_col,
+                        &count_col,
+                        &zscore_str,
+                    ]);
             }
             _ => {
                 {};
@@ -157,4 +175,7 @@ fn main() {
         }
 
     }
+    writer.flush();
+    let elapsed = now.elapsed();
+            println!("Elapsed: {:.2?}", elapsed);
 }
