@@ -7,6 +7,53 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::fs::OpenOptions;
 use std::time::Instant;
+use std::thread::available_parallelism;
+
+
+fn read_process_file_subset(filename: &str, groupby_col: String, count_col: String, cpu_core: u32) -> HashMap<String, (i32, Decimal)>{
+    /*
+    Every cpu core reads the csv separately and skips all rows except the ones
+    of it's subset. Results are merged afterwards.
+    */
+
+    // Read CSV file
+    let file = File::open(filename).expect("Could not open file");
+    let reader = BufReader::new(file);
+    let mut lines = reader.lines();
+    let mut row_idx: u32 = 0;
+
+    // Get header row and determine column indices for groupby and count columns
+    let header_row = lines.next().unwrap().unwrap();
+    let headers: Vec<&str> = header_row.split(',').collect();
+    let mut col_indices = HashMap::new();
+    col_indices.insert(&groupby_col, headers.iter().position(|&x| x == groupby_col).unwrap());
+    col_indices.insert(&count_col, headers.iter().position(|&x| x == count_col).unwrap());
+
+    // Iterate 1st time through rows to get meta data of reference categories of zscores
+
+    // Loop through remaining rows and accumulate counts, sum, and distinct values for each group
+    let mut counts = HashMap::new();
+    for line in lines {
+        match row_idx % cpu_core { // every core handles a different subset of data
+            0 => {
+                let record = line.unwrap();
+                let record: Vec<&str> = record.split(',').collect();
+                let group_val = record[*col_indices.get(&groupby_col).unwrap()].to_string();  // TODO: ADD match statement
+                let col_val = Decimal::from_str(record[*col_indices.get(&count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
+                let (count, sum) = counts.entry(group_val.clone()).or_insert((0, Decimal::new(0, 0)));
+                *count += 1;
+                *sum += col_val;
+            }
+            _ => {
+                ();
+            }
+        }
+
+        row_idx += 1;
+
+    }
+    return counts
+}
 
 
 fn write_to_file_header(path: &str, groupby_col: &str, count_col: String) -> Result<(), Box<dyn Error>> {
@@ -59,6 +106,7 @@ let now = Instant::now();
     let count_col = &env::args().nth(2).expect("count_col not provided");
     let filename = &env::args().nth(3).expect("file_name not provided");
     let result_filename = &env::args().nth(4).expect("result file_name not provided");
+    let available_cores: u32 = available_parallelism().unwrap().get() as u32;  // get info how many threads we can use
 
 
     // Read CSV file
