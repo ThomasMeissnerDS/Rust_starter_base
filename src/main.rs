@@ -182,7 +182,7 @@ let now = Instant::now();
     };
 
     // join results of chunks back together
-    let counts:HashMap<String, (i32, rust_decimal::Decimal)> = HashMap::new();
+    let mut counts:HashMap<String, (i32, rust_decimal::Decimal)> = HashMap::new();
     for result in results {
         for (key, value) in result {
             let (count, sum) = counts.entry(key).or_insert((0, Decimal::new(0, 0)));
