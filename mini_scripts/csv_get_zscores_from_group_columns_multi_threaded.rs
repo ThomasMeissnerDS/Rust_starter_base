@@ -1,6 +1,7 @@
 use csv;
+use rayon::prelude::*;
 use rust_decimal::prelude::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::fs::File;
@@ -10,7 +11,7 @@ use std::time::Instant;
 use std::thread::available_parallelism;
 
 
-fn read_process_file_subset(filename: &str, cpu_core: u32) -> HashMap{
+fn read_process_file_subset(filename: &str, groupby_col: String, count_col: String, cpu_core: u32, total_cores: u32) -> HashMap<String, (i32, Decimal)>{
     /*
     Every cpu core reads the csv separately and skips all rows except the ones
     of it's subset. Results are merged afterwards.
@@ -26,20 +27,20 @@ fn read_process_file_subset(filename: &str, cpu_core: u32) -> HashMap{
     let header_row = lines.next().unwrap().unwrap();
     let headers: Vec<&str> = header_row.split(',').collect();
     let mut col_indices = HashMap::new();
-    col_indices.insert(groupby_col, headers.iter().position(|&x| x == groupby_col).unwrap());
-    col_indices.insert(count_col, headers.iter().position(|&x| x == count_col).unwrap());
+    col_indices.insert(&groupby_col, headers.iter().position(|&x| x == groupby_col).unwrap());
+    col_indices.insert(&count_col, headers.iter().position(|&x| x == count_col).unwrap());
 
     // Iterate 1st time through rows to get meta data of reference categories of zscores
 
     // Loop through remaining rows and accumulate counts, sum, and distinct values for each group
     let mut counts = HashMap::new();
     for line in lines {
-        match row_idx % cpu_core { // every core handles a different subset of data
-            0 => {
+        match row_idx % total_cores == cpu_core { // every core handles a different subset of data
+            true => {
                 let record = line.unwrap();
                 let record: Vec<&str> = record.split(',').collect();
-                let group_val = record[*col_indices.get(groupby_col).unwrap()].to_string();  // TODO: ADD match statement
-                let col_val = Decimal::from_str(record[*col_indices.get(count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
+                let group_val = record[*col_indices.get(&groupby_col).unwrap()].to_string();  // TODO: ADD match statement
+                let col_val = Decimal::from_str(record[*col_indices.get(&count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
                 let (count, sum) = counts.entry(group_val.clone()).or_insert((0, Decimal::new(0, 0)));
                 *count += 1;
                 *sum += col_val;
@@ -100,7 +101,7 @@ fn write_to_file_row(path: &str, groupby_col: &str, count_col: String, zscore: S
 
 
 fn main() {
-let now = Instant::now();
+    let now = Instant::now();
     // Parse command line arguments
     let groupby_col = &env::args().nth(1).expect("groupby_col not provided");
     let count_col = &env::args().nth(2).expect("count_col not provided");
@@ -122,19 +123,34 @@ let now = Instant::now();
     col_indices.insert(count_col, headers.iter().position(|&x| x == count_col).unwrap());
 
     // Iterate 1st time through rows to get meta data of reference categories of zscores
+    let range: Vec<u32> = (1..available_cores+1).collect();
+    let mut results = Vec::new();
+    let mut threads = Vec::new();
+    for thread_idx in range {
+        let filename = filename.clone();
+        let groupby_col = groupby_col.clone();
+        let count_col = count_col.clone();
 
-    // Loop through remaining rows and accumulate counts, sum, and distinct values for each group
-    let mut counts = HashMap::new();
-    for line in lines {
-        let record = line.unwrap();
-        let record: Vec<&str> = record.split(',').collect();
-        let group_val = record[*col_indices.get(groupby_col).unwrap()].to_string();  // TODO: ADD match statement
-        let col_val = Decimal::from_str(record[*col_indices.get(count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
-        let (count, sum) = counts.entry(group_val.clone()).or_insert((0, Decimal::new(0, 0)));
-        *count += 1;
-        *sum += col_val;
-
+        threads.push(std::thread::spawn(move || {
+            read_process_file_subset(&filename, groupby_col, count_col, thread_idx, available_cores)
+        }));
     }
+
+    for thread in threads {
+        results.extend(thread.join());
+    };
+
+    // join results of chunks back together
+    let mut counts = HashMap::new();
+    for result in results {
+        for (key, value) in result {
+            let (count, sum) = counts.entry(key).or_insert((0, Decimal::new(0, 0)));
+            *count += value.0;
+            *sum += value.1;
+        }
+    }
+
+
 
     //println!("{:?}", &counts);
 
@@ -154,7 +170,7 @@ let now = Instant::now();
         let group_hash = counts.get(&group_val);
         match group_hash {
             Some(value) => {
-            // calculate total of deltas from individual values to group mean
+                // calculate total of deltas from individual values to group mean
                 let sum: f64 = value.1.to_f64().unwrap();
                 let counts: f64 =  value.0 as f64;
                 let mean = sum / counts;
@@ -173,8 +189,6 @@ let now = Instant::now();
         *stds.entry(String::from(key).to_owned()).or_default() += (value / (*nb_unique as f64)).sqrt();
     }
 
-    println!("{:?}", stds);
-
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
 
@@ -184,14 +198,14 @@ let now = Instant::now();
     // Iterate 3rd time through rows to calculate zscores on the fly and export into results csv
     let file = File::open(filename).expect("Could not open file");
     let reader = BufReader::new(file);
-    let mut lines = reader.lines();
+    let lines = reader.lines();
 
     let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .append(true)
-            .open(&result_filename)
-            .unwrap();
+        .write(true)
+        .create(true)
+        .append(true)
+        .open(&result_filename)
+        .unwrap();
 
     let mut writer = csv::Writer::from_writer(file);
 
@@ -205,17 +219,17 @@ let now = Instant::now();
         let mut zscore: f64 = 0.0;
         match group_hash {
             Some(value) => {
-            // calculate total of deltas from individual values to group mean
+                // calculate total of deltas from individual values to group mean
                 let sum: f64 = value.1.to_f64().unwrap();
                 let mean = sum / value.0 as f64;
                 let std = stds.get(&group_val);
                 zscore = (col_val.to_f64().unwrap() - mean) / std.unwrap();
                 let zscore_str: String = zscore.to_string();
                 writer.write_record(&[
-                        &groupby_col,
-                        &count_col,
-                        &zscore_str,
-                    ]);
+                    &groupby_col,
+                    &count_col,
+                    &zscore_str,
+                ]);
             }
             _ => {
                 {};
@@ -225,5 +239,5 @@ let now = Instant::now();
     }
     writer.flush();
     let elapsed = now.elapsed();
-            println!("Elapsed: {:.2?}", elapsed);
+    println!("Elapsed: {:.2?}", elapsed);
 }

@@ -635,6 +635,7 @@ name = "rust_starter"
 version = "0.1.0"
 dependencies = [
  "csv",
+ "csv-core",
  "flurry",
  "fnv",
  "itertools",
