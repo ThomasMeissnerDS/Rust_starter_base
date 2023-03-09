@@ -1,6 +1,7 @@
 use csv;
+use rayon::prelude::*;
 use rust_decimal::prelude::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::fs::File;
@@ -122,6 +123,11 @@ let now = Instant::now();
     col_indices.insert(count_col, headers.iter().position(|&x| x == count_col).unwrap());
 
     // Iterate 1st time through rows to get meta data of reference categories of zscores
+    let mut results: Vec<HashMap<String, (i32, Decimal)>> = vec![];
+    (1..available_cores+1).par_iter().for_each ( |thread_idx| {
+        results.push(read_process_file_subset(&filename, groupby_col.clone(), count_col.clone(), thread_idx));
+    }
+    );
 
     // Loop through remaining rows and accumulate counts, sum, and distinct values for each group
     let mut counts = HashMap::new();
