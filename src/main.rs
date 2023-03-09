@@ -7,6 +7,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::fs::OpenOptions;
+use std::sync::{Arc, RwLock, RwLockReadGuard};
 use std::time::Instant;
 use std::thread::available_parallelism;
 
@@ -57,7 +58,7 @@ fn read_process_file_subset(filename: &str, groupby_col: &String, count_col: &St
 }
 
 fn get_total_deltas_subset(filename: &str, groupby_col: &String, count_col: &String, cpu_core: u32, total_cores: u32,
-                           counts: HashMap<String, (i32, Decimal)>, col_indices: HashMap<&String, usize>) -> HashMap<String, f64> {
+                           counts: RwLockReadGuard<HashMap<String, (i32, Decimal)>>, col_indices: HashMap<&String, usize>) -> HashMap<String, f64> {
     // Iterate 2nd time through rows to get standard deviation of reference categories of zscores
     let file = File::open(filename).expect("Could not open file");
     let reader = BufReader::new(file);
@@ -72,7 +73,7 @@ fn get_total_deltas_subset(filename: &str, groupby_col: &String, count_col: &Str
                 let record: Vec<&str> = record.split(',').collect();
                 let group_val = record[*col_indices.get(&groupby_col).unwrap()].to_string();
                 //println!("{}", &group_val);
-                let col_val = Decimal::from_str(record[*col_indices.get(&count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
+                let col_val = Decimal::from_str(&*record[*col_indices.get(&count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
 
                 let group_hash = counts.get(&group_val);
                 match group_hash {
@@ -181,7 +182,7 @@ let now = Instant::now();
     };
 
     // join results of chunks back together
-    let mut counts = HashMap::new();
+    let counts:HashMap<String, (i32, rust_decimal::Decimal)> = HashMap::new();
     for result in results {
         for (key, value) in result {
             let (count, sum) = counts.entry(key).or_insert((0, Decimal::new(0, 0)));
@@ -195,14 +196,18 @@ let now = Instant::now();
     let range: Vec<u32> = (0..available_cores).collect();
     let mut results = Vec::new();
     let mut threads = Vec::new();
+    let counts_shared = Arc::new(RwLock::new(counts));
+    let counts_shared_clone = counts_shared.clone();
+
     for thread_idx in range {
         let f_name = filename.clone();
         let groupby_col = &env::args().nth(1).expect("groupby_col not provided");
         let count_col = &env::args().nth(2).expect("count_col not provided");
+
         threads.push(std::thread::spawn(move || {
             get_total_deltas_subset(&f_name, &groupby_col,
                                     &count_col, thread_idx,
-                                    available_cores, counts.clone(),
+                                    available_cores, counts_shared_clone.read().unwrap(),
                                     col_indices.clone())
         }));
     }
@@ -211,6 +216,7 @@ let now = Instant::now();
         results.extend(thread.join());
     };
 
+    let counts = counts_shared_clone.read().unwrap();
 
 
     let file = File::open(filename).expect("Could not open file");
