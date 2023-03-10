@@ -6,6 +6,7 @@ use std::env;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::iter::FromIterator;
 use std::fs::OpenOptions;
 use std::sync::{Arc, RwLock, RwLockReadGuard};
 use std::time::Instant;
@@ -57,23 +58,23 @@ fn read_process_file_subset(filename: &str, groupby_col: &String, count_col: &St
     return counts
 }
 
-fn get_total_deltas_subset(filename: &str, groupby_col: &String, count_col: &String, cpu_core: u32, total_cores: u32,
-                           counts: RwLockReadGuard<HashMap<String, (i32, Decimal)>>, col_indices: HashMap<&String, usize>) -> HashMap<String, f64> {
+fn get_total_deltas_subset(filename: &str, groupby_col: &String, count_col: &String, cpu_core: &u32, total_cores: u32,
+                           counts: &HashMap<String, (i32, Decimal)>, col_indices: &HashMap<String, usize>) -> HashMap<String, f64> {
     // Iterate 2nd time through rows to get standard deviation of reference categories of zscores
     let file = File::open(filename).expect("Could not open file");
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
-    let mut row_idx: u32 = cpu_core;
+    let mut row_idx: u32 = *cpu_core;
 
     let mut deltas:HashMap<String, f64> = HashMap::new();
     for line in lines {
-        match row_idx % total_cores == cpu_core { // every core handles a different subset of data
+        match row_idx % total_cores == *cpu_core { // every core handles a different subset of data
             true => {
                 let record = line.unwrap();
                 let record: Vec<&str> = record.split(',').collect();
-                let group_val = record[*col_indices.get(&groupby_col).unwrap()].to_string();
+                let group_val = record[*col_indices.get(groupby_col).unwrap()].to_string();
                 //println!("{}", &group_val);
-                let col_val = Decimal::from_str(&*record[*col_indices.get(&count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
+                let col_val = Decimal::from_str(&*record[*col_indices.get(count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
 
                 let group_hash = counts.get(&group_val);
                 match group_hash {
@@ -97,6 +98,7 @@ fn get_total_deltas_subset(filename: &str, groupby_col: &String, count_col: &Str
     }
     return deltas
 }
+
 
 
 fn write_to_file_header(path: &str, groupby_col: &str, count_col: String) -> Result<(), Box<dyn Error>> {
@@ -145,15 +147,15 @@ fn write_to_file_row(path: &str, groupby_col: &str, count_col: String, zscore: S
 fn main() {
 let now = Instant::now();
     // Parse command line arguments
-    let groupby_col = &env::args().nth(1).expect("groupby_col not provided");
-    let count_col = &env::args().nth(2).expect("count_col not provided");
-    let filename = &env::args().nth(3).expect("file_name not provided");
+    let groupby_col = env::args().nth(1).expect("groupby_col not provided");
+    let count_col = env::args().nth(2).expect("count_col not provided");
+    let filename = env::args().nth(3).expect("file_name not provided");
     let result_filename = &env::args().nth(4).expect("result file_name not provided");
     let available_cores: u32 = available_parallelism().unwrap().get() as u32;  // get info how many threads we can use
 
 
     // Read CSV file
-    let file = File::open(filename).expect("Could not open file");
+    let file = File::open(filename.clone()).expect("Could not open file");
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
 
@@ -161,8 +163,8 @@ let now = Instant::now();
     let header_row = lines.next().unwrap().unwrap();
     let headers: Vec<&str> = header_row.split(',').collect();
     let mut col_indices = HashMap::new();
-    col_indices.insert(groupby_col, headers.iter().position(|&x| x == groupby_col).unwrap());
-    col_indices.insert(count_col, headers.iter().position(|&x| x == count_col).unwrap());
+    col_indices.insert(groupby_col.clone(), headers.iter().position(|&x| x == groupby_col).unwrap());
+    col_indices.insert(count_col.clone(), headers.iter().position(|&x| x == count_col).unwrap());
 
     // Iterate 1st time through rows to get meta data of reference categories of zscores
     let range: Vec<u32> = (0..available_cores).collect();
@@ -170,8 +172,8 @@ let now = Instant::now();
     let mut threads = Vec::new();
     for thread_idx in range {
         let f_name = filename.clone();
-        let groupby_col = &env::args().nth(1).expect("groupby_col not provided");
-        let count_col = &env::args().nth(2).expect("count_col not provided");
+        let groupby_col = env::args().nth(1).expect("groupby_col not provided");
+        let count_col = env::args().nth(2).expect("count_col not provided");
         threads.push(std::thread::spawn(move || {
             read_process_file_subset(&f_name, &groupby_col, &count_col, thread_idx, available_cores)
         }));
@@ -191,24 +193,28 @@ let now = Instant::now();
         }
     }
 
+    let counts_shared = Arc::new(RwLock::new(&counts.clone()));
+    let counts_shared_clone = counts_shared.clone();
+
+    let col_indices_shared = Arc::new(RwLock::new(&col_indices.clone()));
+    let col_indices_shared_clone = col_indices_shared.clone();
 
     // Iterate 2nd time through rows to get standard deviation of reference categories of zscores
     let range: Vec<u32> = (0..available_cores).collect();
     let mut results = Vec::new();
     let mut threads = Vec::new();
-    let counts_shared = Arc::new(RwLock::new(counts));
-    let counts_shared_clone = counts_shared.clone();
+
 
     for thread_idx in range {
         let f_name = filename.clone();
-        let groupby_col = &env::args().nth(1).expect("groupby_col not provided");
-        let count_col = &env::args().nth(2).expect("count_col not provided");
+        let groupby_col = env::args().nth(1).expect("groupby_col not provided");
+        let count_col = env::args().nth(2).expect("count_col not provided");
 
-        threads.push(std::thread::spawn(move || {
+        threads.push(std::thread::spawn(move|| {
             get_total_deltas_subset(&f_name, &groupby_col,
-                                    &count_col, thread_idx,
-                                    available_cores, counts_shared_clone.read().unwrap(),
-                                    col_indices.clone())
+                                    &count_col, &thread_idx,
+                                    available_cores.clone(), &counts_shared_clone.read().unwrap(),
+                                    &col_indices_shared_clone.read().unwrap())
         }));
     }
 
@@ -216,10 +222,8 @@ let now = Instant::now();
         results.extend(thread.join());
     };
 
-    let counts = counts_shared_clone.read().unwrap();
 
-
-    let file = File::open(filename).expect("Could not open file");
+    let file = File::open(filename.clone()).expect("Could not open file");
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
 
@@ -227,9 +231,9 @@ let now = Instant::now();
     for line in lines {
         let record = line.unwrap();
         let record: Vec<&str> = record.split(',').collect();
-        let group_val = record[*col_indices.get(groupby_col).unwrap()].to_string();
+        let group_val = record[*col_indices.get(&groupby_col).unwrap()].to_string();
         //println!("{}", &group_val);
-        let col_val = Decimal::from_str(record[*col_indices.get(count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
+        let col_val = Decimal::from_str(record[*col_indices.get(&count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
 
         let group_hash = counts.get(&group_val);
         match group_hash {
@@ -276,8 +280,8 @@ let now = Instant::now();
     for line in lines {
         let record = line.unwrap();
         let record: Vec<&str> = record.split(',').collect();
-        let group_val = record[*col_indices.get(groupby_col).unwrap()].to_string();
-        let col_val = Decimal::from_str(record[*col_indices.get(count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
+        let group_val = record[*col_indices.get(&groupby_col).unwrap()].to_string();
+        let col_val = Decimal::from_str(record[*col_indices.get(&count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
 
         let group_hash = counts.get(&group_val);
         let mut zscore: f64 = 0.0;
