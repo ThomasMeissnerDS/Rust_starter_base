@@ -41,7 +41,7 @@ fn read_process_file_subset(filename: &str, groupby_col: &String, count_col: &St
             true => {
                 let record = line.unwrap();
                 let record: Vec<&str> = record.split(',').collect();
-                let group_val = record[*col_indices.get(&groupby_col).unwrap()].to_string();  // TODO: ADD match statement
+                let group_val = record[*col_indices.get(&groupby_col).unwrap()].to_string();
                 let col_val = Decimal::from_str(record[*col_indices.get(&count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
                 let (count, sum) = counts.entry(group_val.clone()).or_insert((0, Decimal::new(0, 0)));
                 *count += 1;
@@ -66,6 +66,11 @@ fn get_total_deltas_subset(filename: &str, groupby_col: &String, count_col: &Str
     let mut lines = reader.lines();
     let mut row_idx: u32 = cpu_core;
 
+    // get headers so row counts matches the one of our first loop through csvs
+    let header_row = lines.next().unwrap().unwrap();
+    let _headers: Vec<&str> = header_row.split(',').collect();
+
+
     let mut deltas:HashMap<String, f64> = HashMap::new();
     for line in lines {
         match row_idx % total_cores == cpu_core { // every core handles a different subset of data
@@ -76,6 +81,7 @@ fn get_total_deltas_subset(filename: &str, groupby_col: &String, count_col: &Str
                 //println!("{}", &group_val);
                 let col_val = Decimal::from_str(&*record[*col_indices.get(count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
 
+
                 let group_hash = counts.get(&group_val);
                 match group_hash {
                     Some(value) => {
@@ -83,7 +89,8 @@ fn get_total_deltas_subset(filename: &str, groupby_col: &String, count_col: &Str
                         let sum: f64 = value.1.to_f64().unwrap();
                         let counts: f64 = value.0 as f64;
                         let mean = sum / counts;
-                        *deltas.entry(group_val.clone()).or_default() += (col_val.to_f64().unwrap() - mean).powf(2.0);
+                        let delta = deltas.entry(group_val.clone()).or_insert((0.0));
+                        *delta += (col_val.to_f64().unwrap() - mean).powf(2.0);
                     }
                     _ => {
                         {};
@@ -145,7 +152,7 @@ fn write_to_file_row(path: &str, groupby_col: &str, count_col: String, zscore: S
 
 
 fn main() {
-let now = Instant::now();
+    let now = Instant::now();
     // Parse command line arguments
     let groupby_col = env::args().nth(1).expect("groupby_col not provided");
     let count_col = env::args().nth(2).expect("count_col not provided");
@@ -236,7 +243,6 @@ let now = Instant::now();
         }
     }
 
-
     // convert total distances to mean to standard deviation
     let mut stds: HashMap<String, f64> = HashMap::new();
 
@@ -257,11 +263,11 @@ let now = Instant::now();
     let lines = reader.lines();
 
     let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .append(true)
-            .open(&result_filename)
-            .unwrap();
+        .write(true)
+        .create(true)
+        .append(true)
+        .open(&result_filename)
+        .unwrap();
 
     let mut writer = csv::Writer::from_writer(file);
 
@@ -275,17 +281,17 @@ let now = Instant::now();
         let mut zscore: f64 = 0.0;
         match group_hash {
             Some(value) => {
-            // calculate total of deltas from individual values to group mean
+                // calculate total of deltas from individual values to group mean
                 let sum: f64 = value.1.to_f64().unwrap();
                 let mean = sum / value.0 as f64;
                 let std = stds.get(&group_val);
                 zscore = (col_val.to_f64().unwrap() - mean) / std.unwrap();
                 let zscore_str: String = zscore.to_string();
                 writer.write_record(&[
-                        &groupby_col,
-                        &count_col,
-                        &zscore_str,
-                    ]);
+                    &groupby_col,
+                    &count_col,
+                    &zscore_str,
+                ]);
             }
             _ => {
                 {};
@@ -295,5 +301,5 @@ let now = Instant::now();
     }
     writer.flush();
     let elapsed = now.elapsed();
-            println!("Elapsed: {:.2?}", elapsed);
+    println!("Elapsed: {:.2?}", elapsed);
 }
