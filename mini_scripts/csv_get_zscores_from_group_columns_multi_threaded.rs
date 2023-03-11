@@ -158,7 +158,7 @@ fn main() {
     let count_col = env::args().nth(2).expect("count_col not provided");
     let filename = env::args().nth(3).expect("file_name not provided");
     let result_filename = &env::args().nth(4).expect("result file_name not provided");
-    let available_cores: u32 = available_parallelism().unwrap().get() as u32;  // get info how many threads we can use
+    let available_cores: u32 = available_parallelism().unwrap().get()  as u32 / 2;  // get info how many threads we can use and use half of them
 
 
     // Read CSV file
