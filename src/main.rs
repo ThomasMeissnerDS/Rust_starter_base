@@ -58,17 +58,17 @@ fn read_process_file_subset(filename: &str, groupby_col: &String, count_col: &St
     return counts
 }
 
-fn get_total_deltas_subset(filename: &str, groupby_col: &String, count_col: &String, cpu_core: &u32, total_cores: u32,
+fn get_total_deltas_subset(filename: &str, groupby_col: &String, count_col: &String, cpu_core: u32, total_cores: u32,
                            counts: &HashMap<String, (i32, Decimal)>, col_indices: &HashMap<String, usize>) -> HashMap<String, f64> {
     // Iterate 2nd time through rows to get standard deviation of reference categories of zscores
     let file = File::open(filename).expect("Could not open file");
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
-    let mut row_idx: u32 = *cpu_core;
+    let mut row_idx: u32 = cpu_core;
 
     let mut deltas:HashMap<String, f64> = HashMap::new();
     for line in lines {
-        match row_idx % total_cores == *cpu_core { // every core handles a different subset of data
+        match row_idx % total_cores == cpu_core { // every core handles a different subset of data
             true => {
                 let record = line.unwrap();
                 let record: Vec<&str> = record.split(',').collect();
@@ -83,7 +83,7 @@ fn get_total_deltas_subset(filename: &str, groupby_col: &String, count_col: &Str
                         let sum: f64 = value.1.to_f64().unwrap();
                         let counts: f64 = value.0 as f64;
                         let mean = sum / counts;
-                        *deltas.entry(String::from(group_val).to_owned()).or_default() += (col_val.to_f64().unwrap() - mean).powf(2.0);
+                        *deltas.entry(group_val.clone()).or_default() += (col_val.to_f64().unwrap() - mean).powf(2.0);
                     }
                     _ => {
                         {};
@@ -193,11 +193,8 @@ let now = Instant::now();
         }
     }
 
-    let counts_shared = Arc::new(RwLock::new(&counts.clone()));
-    let counts_shared_clone = counts_shared.clone();
-
-    let col_indices_shared = Arc::new(RwLock::new(&col_indices.clone()));
-    let col_indices_shared_clone = col_indices_shared.clone();
+    let counts_shared = Arc::new(counts.clone());
+    let col_indices_shared = Arc::new(col_indices.clone());
 
     // Iterate 2nd time through rows to get standard deviation of reference categories of zscores
     let range: Vec<u32> = (0..available_cores).collect();
@@ -211,10 +208,12 @@ let now = Instant::now();
         let count_col = env::args().nth(2).expect("count_col not provided");
 
         threads.push(std::thread::spawn(move|| {
+            let counts_shared_clone = counts_shared.clone();
+            let col_indices_shared_clone = col_indices_shared.clone();
             get_total_deltas_subset(&f_name, &groupby_col,
-                                    &count_col, &thread_idx,
-                                    available_cores.clone(), &counts_shared_clone.read().unwrap(),
-                                    &col_indices_shared_clone.read().unwrap())
+                                    &count_col, thread_idx.clone(),
+                                    available_cores.clone(), &counts_shared_clone,
+                                    &col_indices_shared_clone)
         }));
     }
 
@@ -222,33 +221,16 @@ let now = Instant::now();
         results.extend(thread.join());
     };
 
-
-    let file = File::open(filename.clone()).expect("Could not open file");
-    let reader = BufReader::new(file);
-    let mut lines = reader.lines();
-
-    let mut deltas:HashMap<String, f64> = HashMap::new();
-    for line in lines {
-        let record = line.unwrap();
-        let record: Vec<&str> = record.split(',').collect();
-        let group_val = record[*col_indices.get(&groupby_col).unwrap()].to_string();
-        //println!("{}", &group_val);
-        let col_val = Decimal::from_str(record[*col_indices.get(&count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
-
-        let group_hash = counts.get(&group_val);
-        match group_hash {
-            Some(value) => {
-            // calculate total of deltas from individual values to group mean
-                let sum: f64 = value.1.to_f64().unwrap();
-                let counts: f64 =  value.0 as f64;
-                let mean = sum / counts;
-                *deltas.entry(String::from(group_val).to_owned()).or_default() += (col_val.to_f64().unwrap() - mean).powf(2.0);
-            }
-            _ => {
-                {};
-            }
+    // join results of chunks back together
+    let mut deltas: HashMap<String,f64> = HashMap::new();
+    for result in results {
+        for (key, value) in result {
+            let delta = deltas.entry(key).or_insert(0.0);
+            *delta += value;
         }
     }
+
+
     // convert total distances to mean to standard deviation
     let mut stds: HashMap<String, f64> = HashMap::new();
 
