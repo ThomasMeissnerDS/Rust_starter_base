@@ -111,12 +111,15 @@ fn write_subset_to_csv(filename: &str, groupby_col: &String, count_col: &String,
                            result_filename: &str) {
     let subset_filename: String =  format!("{}_{}.csv", result_filename.clone(), cpu_core.clone());
     // create results csv with header only
-    write_to_file_header(&subset_filename, &groupby_col,(&count_col).to_string());
+    write_to_file_header(&subset_filename, "index".to_string(), &groupby_col, (&count_col).to_string());
 
     // Iterate 3rd time through rows to calculate zscores on the fly and export into results csv
     let file = File::open(filename).expect("Could not open file");
     let reader = BufReader::new(file);
-    let lines = reader.lines();
+    let mut lines = reader.lines();
+    // get headers so row counts matches the one of our first loop through csvs
+    let header_row = lines.next().unwrap().unwrap();
+    let _headers: Vec<&str> = header_row.split(',').collect();
 
     let mut file = OpenOptions::new()
         .write(true)
@@ -147,9 +150,10 @@ fn write_subset_to_csv(filename: &str, groupby_col: &String, count_col: &String,
                             zscore = (col_val.to_f64().unwrap() - mean) / std.unwrap();
                             let zscore_str: String = zscore.to_string();
                             writer.write_record(&[
-                                groupby_col,
-                                count_col,
-                                &zscore_str,
+                                row_idx.to_string(),
+                                groupby_col.to_string(),
+                                count_col.to_string(),
+                                zscore_str,
                             ]);
                         }
                         _ => {
@@ -167,12 +171,13 @@ fn write_subset_to_csv(filename: &str, groupby_col: &String, count_col: &String,
     }
 
 
-fn write_to_file_header(path: &str, groupby_col: &str, count_col: String) -> Result<(), Box<dyn Error>> {
+fn write_to_file_header(path: &str, row_idx: String, groupby_col: &str, count_col: String) -> Result<(), Box<dyn Error>> {
     // Creates new `Writer` for `stdout`
     let mut writer = csv::Writer::from_path(path)?;
 
     // Write records one at a time including the header record.
     writer.write_record(&[
+        &row_idx,
         groupby_col,
         &count_col,
         &format!("{}_zscore", &count_col),

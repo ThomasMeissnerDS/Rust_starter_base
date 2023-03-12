@@ -111,7 +111,7 @@ fn write_subset_to_csv(filename: &str, groupby_col: &String, count_col: &String,
                            result_filename: &str) {
     let subset_filename: String =  format!("{}_{}.csv", result_filename.clone(), cpu_core.clone());
     // create results csv with header only
-    write_to_file_header(&subset_filename, &groupby_col,(&count_col).to_string());
+    write_to_file_header(&subset_filename, &groupby_col, (&count_col).to_string());
 
     // Iterate 3rd time through rows to calculate zscores on the fly and export into results csv
     let file = File::open(filename).expect("Could not open file");
