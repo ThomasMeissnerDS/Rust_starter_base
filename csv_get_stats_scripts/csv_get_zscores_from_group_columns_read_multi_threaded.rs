@@ -77,7 +77,7 @@ fn get_total_deltas_subset(filename: &str, groupby_col: &String, count_col: &Str
             true => {
                 let record = line.unwrap();
                 let record: Vec<&str> = record.split(',').collect();
-                let group_val = record[*col_indices.get(&groupby_col[..]).unwrap()].to_string();
+                let group_val = record[*col_indices.get(groupby_col).unwrap()].to_string();
                 //println!("{}", &group_val);
                 let col_val = Decimal::from_str(&*record[*col_indices.get(count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
 
@@ -89,7 +89,7 @@ fn get_total_deltas_subset(filename: &str, groupby_col: &String, count_col: &Str
                         let sum: f64 = value.1.to_f64().unwrap();
                         let counts: f64 = value.0 as f64;
                         let mean = sum / counts;
-                        let delta = deltas.entry(group_val.clone()).or_insert(0.0);
+                        let delta = deltas.entry(group_val.clone()).or_insert((0.0));
                         *delta += (col_val.to_f64().unwrap() - mean).powf(2.0);
                     }
                     _ => {
@@ -106,82 +106,41 @@ fn get_total_deltas_subset(filename: &str, groupby_col: &String, count_col: &Str
     return deltas
 }
 
-fn write_subset_to_csv(filename: &str, groupby_col: &String, count_col: &String, cpu_core: u32, total_cores: u32,
-                           counts: &HashMap<String, (i32, Decimal)>, col_indices: &HashMap<String, usize>, stds: &HashMap<String, f64>,
-                           result_filename: &str) {
-    let subset_filename: String =  format!("{}_{}.csv", result_filename.clone(), cpu_core.clone());
-    // create results csv with header only
-    write_to_file_header(&subset_filename, "index".to_string(), &groupby_col, (&count_col).to_string());
-
-    // Iterate 3rd time through rows to calculate zscores on the fly and export into results csv
-    let file = File::open(filename).expect("Could not open file");
-    let reader = BufReader::new(file);
-    let mut lines = reader.lines();
-    // get headers so row counts matches the one of our first loop through csvs
-    let header_row = lines.next().unwrap().unwrap();
-    let _headers: Vec<&str> = header_row.split(',').collect();
-
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .append(true)
-        .open(&subset_filename)
-        .unwrap();
-
-    let mut writer = csv::Writer::from_writer(file);
-    let mut row_idx: u32 = cpu_core;
-
-    for line in lines {
-            match row_idx % total_cores == cpu_core { // every core handles a different subset of data
-                true => {
-                    let record = line.unwrap();
-                    let record: Vec<&str> = record.split(',').collect();
-                    let group_val = record[*col_indices.get(groupby_col).unwrap()].to_string();
-                    let col_val = Decimal::from_str(record[*col_indices.get(count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
-
-                    let group_hash = counts.get(&group_val);
-                    let mut zscore: f64 = 0.0;
-                    match group_hash {
-                        Some(value) => {
-                            // calculate total of deltas from individual values to group mean
-                            let sum: f64 = value.1.to_f64().unwrap();
-                            let mean = sum / value.0 as f64;
-                            let std = stds.get(&group_val);
-                            zscore = (col_val.to_f64().unwrap() - mean) / std.unwrap();
-                            let zscore_str: String = zscore.to_string();
-                            writer.write_record(&[
-                                row_idx.to_string(),
-                                group_val,
-                                col_val.to_string(),
-                                zscore_str,
-                            ]);
-                        }
-                        _ => {
-                            {};
-                        }
-                    }
-                }
-                _ => {
-                    ();
-                }
-             }
-             row_idx += 1;
-         }
-         writer.flush();
-    }
 
 
-fn write_to_file_header(path: &str, row_idx: String, groupby_col: &str, count_col: String) -> Result<(), Box<dyn Error>> {
+fn write_to_file_header(path: &str, groupby_col: &str, count_col: String) -> Result<(), Box<dyn Error>> {
     // Creates new `Writer` for `stdout`
     let mut writer = csv::Writer::from_path(path)?;
 
     // Write records one at a time including the header record.
     writer.write_record(&[
-        &row_idx,
         groupby_col,
         &count_col,
         &format!("{}_zscore", &count_col),
+    ])?;
+
+    // A CSV writer maintains an internal buffer, so it's important
+    // to flush the buffer when you're done.
+    writer.flush()?;
+
+    Ok(())
+}
+
+fn write_to_file_row(path: &str, groupby_col: &str, count_col: String, zscore: String) -> Result<(), Box<dyn Error>> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .append(true)
+        .open(path)
+        .unwrap();
+    // Creates new `Writer` for `stdout`
+    let mut writer = csv::Writer::from_writer(file);
+
+    // Write records one at a time including the header record.
+    writer.write_record(&[
+        groupby_col,
+        &count_col,
+        &zscore,
     ])?;
 
     // A CSV writer maintains an internal buffer, so it's important
@@ -295,36 +254,52 @@ fn main() {
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
 
+    // create results csv with header only
+    write_to_file_header(&result_filename, &groupby_col,(&count_col).to_string());
 
-    let range: Vec<u32> = (0..available_cores).collect();
+    // Iterate 3rd time through rows to calculate zscores on the fly and export into results csv
+    let file = File::open(filename).expect("Could not open file");
+    let reader = BufReader::new(file);
+    let lines = reader.lines();
 
-    std::thread::scope(|s| {
-    for thread_idx in range {
-        let f_name = filename.clone();
-        let groupby_col = env::args().nth(1).expect("groupby_col not provided");
-        let count_col = env::args().nth(2).expect("count_col not provided");
-        let result_filename = env::args().nth(4).expect("result file_name not provided");
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .append(true)
+        .open(&result_filename)
+        .unwrap();
 
-        s.spawn({
-            let counts = &counts;
-            let col_indices = &col_indices;
-            let stds = &stds;
-            move || {
-                write_subset_to_csv(
-                    &f_name,
+    let mut writer = csv::Writer::from_writer(file);
+
+    for line in lines {
+        let record = line.unwrap();
+        let record: Vec<&str> = record.split(',').collect();
+        let group_val = record[*col_indices.get(&groupby_col).unwrap()].to_string();
+        let col_val = Decimal::from_str(record[*col_indices.get(&count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
+
+        let group_hash = counts.get(&group_val);
+        let mut zscore: f64 = 0.0;
+        match group_hash {
+            Some(value) => {
+                // calculate total of deltas from individual values to group mean
+                let sum: f64 = value.1.to_f64().unwrap();
+                let mean = sum / value.0 as f64;
+                let std = stds.get(&group_val);
+                zscore = (col_val.to_f64().unwrap() - mean) / std.unwrap();
+                let zscore_str: String = zscore.to_string();
+                writer.write_record(&[
                     &groupby_col,
                     &count_col,
-                    thread_idx,
-                    available_cores,
-                    counts,
-                    col_indices,
-                    stds,
-                    &result_filename
-                )
+                    &zscore_str,
+                ]);
             }
-        });
-        }});
+            _ => {
+                {};
+            }
+        }
 
+    }
+    writer.flush();
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
 }
