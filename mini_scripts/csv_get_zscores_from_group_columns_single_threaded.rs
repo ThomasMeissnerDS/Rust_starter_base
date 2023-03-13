@@ -164,8 +164,8 @@ let now = Instant::now();
                 zscore = (col_val.to_f64().unwrap() - mean) / std.unwrap();
                 let zscore_str: String = zscore.to_string();
                 writer.write_record(&[
-                        &groupby_col,
-                        &count_col,
+                        &group_val.to_string(),
+                        &col_val.to_string(),
                         &zscore_str,
                     ]);
             }

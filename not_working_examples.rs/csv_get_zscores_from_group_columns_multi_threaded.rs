@@ -147,6 +147,7 @@ fn write_subset_to_csv(filename: &str, groupby_col: &String, count_col: &String,
                             zscore = (col_val.to_f64().unwrap() - mean) / std.unwrap();
                             let zscore_str: String = zscore.to_string();
                             writer.write_record(&[
+                                println!("{}: {}",row_idx.to_string(),  &zscore);
                                 groupby_col,
                                 count_col,
                                 &zscore_str,
