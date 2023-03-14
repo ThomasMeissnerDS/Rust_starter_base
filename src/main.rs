@@ -1,4 +1,5 @@
 use csv;
+use rand::Rng;
 use rayon::prelude::*;
 use rust_decimal::prelude::*;
 use std::collections::HashMap;
@@ -118,37 +119,30 @@ fn write_subset_to_csv(filename: &str, groupby_col: &String, count_col: &String,
         .unwrap();
 
     let mut writer = csv::Writer::from_writer(file);
-            match row_idx % total_cores == cpu_core { // every core handles a different subset of data
-                true => {
 
-                    let group_val = record[*col_indices.get(groupby_col).unwrap()].to_string();
-                    let col_val = Decimal::from_str(record[*col_indices.get(count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
+    let group_val = record[*col_indices.get(groupby_col).unwrap()].to_string();
+    let col_val = Decimal::from_str(record[*col_indices.get(count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
+    let group_hash = counts.get(&group_val);
+    let mut zscore: f64 = 0.0;
+    match group_hash {
+        Some(value) => {
+            // calculate total of deltas from individual values to group mean
+            let sum: f64 = value.1.to_f64().unwrap();
+            let mean = sum / value.0 as f64;
+            let std = stds.get(&group_val);
+            zscore = (col_val.to_f64().unwrap() - mean) / std.unwrap();
+            let zscore_str: String = zscore.to_string();
+            writer.write_record(&[
+                groupby_col,
+                count_col,
+                &zscore_str,
+            ]);
+        }
+        _ => {
+            {};
+        }
+    }
 
-                    let group_hash = counts.get(&group_val);
-                    let mut zscore: f64 = 0.0;
-                    match group_hash {
-                        Some(value) => {
-                            // calculate total of deltas from individual values to group mean
-                            let sum: f64 = value.1.to_f64().unwrap();
-                            let mean = sum / value.0 as f64;
-                            let std = stds.get(&group_val);
-                            zscore = (col_val.to_f64().unwrap() - mean) / std.unwrap();
-                            let zscore_str: String = zscore.to_string();
-                            writer.write_record(&[
-                                groupby_col,
-                                count_col,
-                                &zscore_str,
-                            ]);
-                        }
-                        _ => {
-                            {};
-                        }
-                    }
-                }
-                _ => {
-                    ();
-                }
-             }
          writer.flush();
     }
 
@@ -323,11 +317,11 @@ fn main() {
 
         std::thread::scope(|s| {
 
-        for thread_idx in &range {
             let f_name = filename.clone();
             let groupby_col = env::args().nth(1).expect("groupby_col not provided");
             let count_col = env::args().nth(2).expect("count_col not provided");
             let result_filename = env::args().nth(4).expect("result file_name not provided");
+            let core = rand::thread_rng().gen_range(0..available_cores);
 
             s.spawn({
                 let counts = &counts;
@@ -341,7 +335,7 @@ fn main() {
                         &count_col,
                         &row_idx,
                         record,
-                        *thread_idx,
+                        core,
                         available_cores,
                         counts,
                         col_indices,
@@ -352,7 +346,7 @@ fn main() {
             });
 
 
-                    }
+
                     });
             row_idx += 1;
             };
