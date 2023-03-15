@@ -1,4 +1,5 @@
 use csv;
+use csv::Writer;
 use rand::Rng;
 use rayon::prelude::*;
 use rust_decimal::prelude::*;
@@ -6,7 +7,7 @@ use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::iter::FromIterator;
 use std::fs::OpenOptions;
 use std::sync::{Arc, RwLock, RwLockReadGuard};
@@ -107,18 +108,10 @@ fn get_total_deltas_subset(filename: &str, groupby_col: &String, count_col: &Str
     return deltas
 }
 
-fn write_subset_to_csv(filename: &str, groupby_col: &String, count_col: &String, row_idx: &u32, record: &Vec<&str>, cpu_core: u32, total_cores: u32,
+fn write_subset_to_csv<W: Write>(filename: &str, groupby_col: &String, count_col: &String, row_idx: &u32, record: &Vec<&str>, cpu_core: u32, total_cores: u32,
                            counts: &HashMap<String, (i32, Decimal)>, col_indices: &HashMap<String, usize>, stds: &HashMap<String, f64>,
-                           result_filename: &str) {
+                           result_filename: &str, writer: &Writer<W>) {
     let subset_filename: String = format!("{}_{}.csv", result_filename.clone(), cpu_core.clone());
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .append(true)
-        .open(&subset_filename)
-        .unwrap();
-
-    let mut writer = csv::Writer::from_writer(file);
 
     let group_val = record[*col_indices.get(groupby_col).unwrap()].to_string();
     let col_val = Decimal::from_str(record[*col_indices.get(count_col).unwrap()]).unwrap_or_else(|_| Decimal::new(0, 0));
@@ -147,7 +140,7 @@ fn write_subset_to_csv(filename: &str, groupby_col: &String, count_col: &String,
     }
 
 
-fn write_to_file_header(result_filename: &str, groupby_col: &str, count_col: &str, cpu_core: u32) {
+fn write_to_file_header<W: Write>(result_filename: &str, groupby_col: &str, count_col: &str, cpu_core: u32) -> Writer<W> {
     let subset_filename: String =  format!("{}_{}.csv", result_filename.clone(), cpu_core.clone());
 
     let mut file = OpenOptions::new()
@@ -161,14 +154,14 @@ fn write_to_file_header(result_filename: &str, groupby_col: &str, count_col: &st
     let writer = csv::Writer::from_path(subset_filename);
 
     // Write records one at a time including the header record.
-    writer.expect("Failed to wrtite record").write_record(&[
+    writer.expect("Failed to write record").write_record(&[
         groupby_col,
         &count_col,
         &format!("{}_zscore", &count_col),
     ]);
 
     // A CSV writer maintains an internal buffer, so it's important
-
+    return writer.unwrap()
 }
 
 
@@ -322,12 +315,14 @@ fn main() {
             let count_col = env::args().nth(2).expect("count_col not provided");
             let result_filename = env::args().nth(4).expect("result file_name not provided");
             let core = rand::thread_rng().gen_range(0..available_cores);
+            let writer = threads[core as usize];
 
             s.spawn({
                 let counts = &counts;
                 let col_indices = &col_indices;
                 let stds = &stds;
                 let record = &record;
+                let writer = &writer;
                 move || {
                     write_subset_to_csv(
                         &f_name,
@@ -340,7 +335,9 @@ fn main() {
                         counts,
                         col_indices,
                         stds,
-                        &f_name
+                        &f_name,
+                        writer
+
                     )
                 }
             });
