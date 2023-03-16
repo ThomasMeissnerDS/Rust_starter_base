@@ -109,8 +109,8 @@ fn get_total_deltas_subset(filename: &str, groupby_col: &String, count_col: &Str
 }
 
 fn write_subset_to_csv<W: Write>(filename: &str, groupby_col: &String, count_col: &String, row_idx: &u32, record: &Vec<&str>, cpu_core: u32, total_cores: u32,
-                           counts: &HashMap<String, (i32, Decimal)>, col_indices: &HashMap<String, usize>, stds: &HashMap<String, f64>,
-                           result_filename: &str, writer: &Writer<W>) {
+                                 counts: &HashMap<String, (i32, Decimal)>, col_indices: &HashMap<String, usize>, stds: &HashMap<String, f64>,
+                                 result_filename: &str, writer: &Writer<W>) {
     let subset_filename: String = format!("{}_{}.csv", result_filename.clone(), cpu_core.clone());
 
     let group_val = record[*col_indices.get(groupby_col).unwrap()].to_string();
@@ -136,22 +136,22 @@ fn write_subset_to_csv<W: Write>(filename: &str, groupby_col: &String, count_col
         }
     }
 
-         writer.flush();
-    }
+    writer.flush();
+}
 
 
 fn write_to_file_header<W: Write>(result_filename: &str, groupby_col: &str, count_col: &str, cpu_core: u32) -> Writer<W> {
     let subset_filename: String =  format!("{}_{}.csv", result_filename.clone(), cpu_core.clone());
 
     let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .append(true)
-            .open(&subset_filename)
-            .unwrap();
+        .write(true)
+        .create(true)
+        .append(true)
+        .open(&subset_filename)
+        .unwrap();
 
     // Creates new `Writer` for `stdout`
-    let writer = csv::Writer::from_path(subset_filename);
+    let writer = csv::Writer::from_writer(file);
 
     // Write records one at a time including the header record.
     writer.expect("Failed to write record").write_record(&[
@@ -161,7 +161,7 @@ fn write_to_file_header<W: Write>(result_filename: &str, groupby_col: &str, coun
     ]);
 
     // A CSV writer maintains an internal buffer, so it's important
-    return writer.unwrap()
+    return writer
 }
 
 
@@ -272,27 +272,27 @@ fn main() {
     // Iterate 3rd time through rows to calculate zscores on the fly and export into results csv
     let range: Vec<u32> = (0..available_cores).collect();
 
-        std::thread::scope(|s| {
-            let mut threads = Vec::new();
-            for thread_idx in range {
-                let f_name = filename.clone();
-                let groupby_col = env::args().nth(1).expect("groupby_col not provided");
-                let count_col = env::args().nth(2).expect("count_col not provided");
-                let result_filename = env::args().nth(4).expect("result file_name not provided");
+    std::thread::scope(|s| {
+        let mut threads = Vec::new();
+        for thread_idx in range {
+            let f_name = filename.clone();
+            let groupby_col = env::args().nth(1).expect("groupby_col not provided");
+            let count_col = env::args().nth(2).expect("count_col not provided");
+            let result_filename = env::args().nth(4).expect("result file_name not provided");
 
-                threads.push(s.spawn({
-                    let counts = &counts;
-                    let col_indices = &col_indices;
-                    move || {
-                        write_to_file_header(
-                            &f_name,
-                            &groupby_col,
-                            &count_col,
-                            thread_idx,
-                        )
-                    }
-                }));
-            }});
+            threads.push(s.spawn({
+                let counts = &counts;
+                let col_indices = &col_indices;
+                move || {
+                    write_to_file_header(
+                        &f_name,
+                        &groupby_col,
+                        &count_col,
+                        thread_idx,
+                    )
+                }
+            }));
+        }});
 
 
 
@@ -315,7 +315,7 @@ fn main() {
             let count_col = env::args().nth(2).expect("count_col not provided");
             let result_filename = env::args().nth(4).expect("result file_name not provided");
             let core = rand::thread_rng().gen_range(0..available_cores);
-            let writer = threads[core as usize];
+            let writer = &threads[core as usize];
 
             s.spawn({
                 let counts = &counts;
@@ -336,7 +336,7 @@ fn main() {
                         col_indices,
                         stds,
                         &f_name,
-                        writer
+                        *writer
 
                     )
                 }
@@ -344,9 +344,9 @@ fn main() {
 
 
 
-                    });
-            row_idx += 1;
-            };
+        });
+        row_idx += 1;
+    };
 
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
