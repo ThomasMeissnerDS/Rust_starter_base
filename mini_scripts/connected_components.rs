@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 
-fn load_mappings_from_csv(filename: &str, entity_col: &str, identity_col: &str) -> (HashMap<u8, str>, HashMap<u8, str>) {
+fn load_mappings_from_csv(filename: &str, entity_col: &str, identity_col: &str) -> (HashMap<&str, &str>, HashMap<&str, &str>) {
 
     let file = File::open(filename).expect("Could not open file");
     let reader = BufReader::new(file);
@@ -21,7 +21,7 @@ fn load_mappings_from_csv(filename: &str, entity_col: &str, identity_col: &str) 
     col_indices.insert(count_col.clone(), headers.iter().position(|&x| x == count_col).unwrap());
 
     let mut entity_to_identifier: HashMap::new();
-    let mut identity_to_identifier: Hashmap::new();
+    //let mut identity_to_identifier: Hashmap::new();
     for line in lines {
         let record = line.unwrap();
         let record: Vec<&str> = record.split(',').collect();
@@ -33,7 +33,7 @@ fn load_mappings_from_csv(filename: &str, entity_col: &str, identity_col: &str) 
     return entity_to_identifier, identity_to_identifier
 }
 
-fn first_hop(entity_to_identifier: HashMap<u8, str>, identity_to_identifier: HashMap<u8, str>) -> HashMap<str, Vec<str>>{
+fn first_hop(entity_to_identifier: HashMap<&str, Vec<&str>>, identity_to_identifier: HashMap<&str, Vec<&str>>) -> HashMap<&str, Vec<&str>>{
     /* let mut my_vector: Vec<i32> = vec![0, 1, 2, 3, 4, 5];*/
     let entity_to_entity: HashMap::new();
     for (entity, identifier) in &*entity_to_identifier {
