@@ -91,6 +91,34 @@ fn first_hop<'a>(vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>
     return (entity_to_entity, entity_to_identifier, identifier_to_entity)
 }
 
+fn multihop_iter<'a>(mut entity_to_entity: HashMap<String, Vec<&'a str>>, vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>) -> HashMap<String, Vec<&'a str>> {
+    let mut entity_to_entity_enhanced: HashMap<String, Vec<&str>> = HashMap::new();
+    for (entity, mut shared_entities) in entity_to_entity.clone().into_iter() {
+        let mut all_entities: Vec<&str> = vec![];
+        for shared_entity in &mut *shared_entities {
+            if let Some(entity_vec) = entity_to_entity.get_mut(&entity as &str) {
+                all_entities.append(entity_vec);
+            }
+            if let Some(shared_entity_vec) = entity_to_entity.get_mut(&shared_entity as &str) {
+                all_entities.append(shared_entity_vec);
+            }
+            // we need this to not overwrite our entries
+            if let Some(already_added_vec) = entity_to_entity_enhanced.get_mut(&entity as &str) {
+                all_entities.append(already_added_vec);
+            }
+            if let Some(already_added_vec) = entity_to_entity_enhanced.get_mut(&shared_entity as &str) {
+                all_entities.append(already_added_vec);
+            }
+            all_entities.sort_unstable();
+            all_entities.dedup();
+            entity_to_entity_enhanced.insert(entity.clone(), all_entities.clone());
+            entity_to_entity_enhanced.insert(shared_entity.to_string(), all_entities.clone());
+
+        }
+    }
+    return entity_to_entity_enhanced
+}
+
 fn main() {
     let filename = &env::args().nth(1).expect("file_name not provided");
     let entity_col = &env::args().nth(2).expect("Missing index of entity column");
@@ -107,10 +135,13 @@ fn main() {
     let mut identifier_to_entities: HashMap<String, Vec<&str>> = HashMap::new();
     (entity_to_entity, entity_to_identifiers, identifier_to_entities) = first_hop(&vec_entities, &vec_identifiers);
 
-    println!("{:?}", entity_to_identifiers);
     println!("{:?}", entity_to_entity);
 
     // executing the first hop
+    let mut entity_to_entity_enhanced: HashMap<String, Vec<&str>> = HashMap::new();
+    entity_to_entity_enhanced = multihop_iter(entity_to_entity, &vec_entities, &vec_identifiers);
+    entity_to_entity = entity_to_entity_enhanced;
+    println!("{:?}", entity_to_entity);
 
 
 }
