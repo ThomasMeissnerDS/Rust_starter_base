@@ -3,6 +3,7 @@ use std::env;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::time::Instant;
 
 fn load_mappings_from_csv(filename: &str, entity_col: &str, identity_col: &str) -> (Vec<String>, Vec<String>){
     let file = File::open(filename).expect("Could not open file");
@@ -34,7 +35,7 @@ fn load_mappings_from_csv(filename: &str, entity_col: &str, identity_col: &str) 
     // Now you can use vec_entities and vec_identifiers as needed.
 }
 
-fn first_hop<'a>(vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>) -> (HashMap<String, Vec<&'a str>>, HashMap<String, Vec<&'a str>>, HashMap<String, Vec<&'a str>>){
+fn first_hop<'a>(vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>) -> HashMap<String, Vec<&'a str>>{
     // In this part we do the the first hop
     let mut entity_to_identifier: HashMap<String, Vec<&str>> = HashMap::new();
     let mut identifier_to_entity: HashMap<String, Vec<&str>> = HashMap::new();
@@ -88,17 +89,16 @@ fn first_hop<'a>(vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>
             }
         }
     }
-    return (entity_to_entity, entity_to_identifier, identifier_to_entity)
+    return entity_to_entity
 }
 
-fn multihop_iter<'a>(mut entity_to_entity: HashMap<String, Vec<&'a str>>, mut shared_entities_length: HashMap<&'a str, usize>, vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>) -> (HashMap<String, Vec<&'a str>> , HashMap<&'a str, usize>, bool ){
+fn multihop_iter<'a>(mut entity_to_entity: HashMap<String, Vec<&'a str>>, mut shared_entities_length: HashMap<&'a str, usize>) -> (HashMap<String, Vec<&'a str>> , HashMap<&'a str, usize>, bool ){
     let mut entity_to_entity_enhanced: HashMap<String, Vec<&str>> = HashMap::new();
     let mut any_chain_got_longer: bool = false;
     for (entity, mut shared_entities) in entity_to_entity.clone().into_iter() {
         let mut all_entities: Vec<&str> = vec![];
         for shared_entity in &mut *shared_entities {
             let mut chain_size_before: usize = 0;
-            let mut chain_size_after: usize = 0;
 
             if let Some(entity_vec) = entity_to_entity.get_mut(&entity as &str) {
                 all_entities.append(entity_vec);
@@ -122,7 +122,7 @@ fn multihop_iter<'a>(mut entity_to_entity: HashMap<String, Vec<&'a str>>, mut sh
             if let Some(chain_size) = shared_entities_length.get_mut(shared_entity) {
                 chain_size_before = *chain_size;
             }
-            chain_size_after = all_entities.len();
+            let mut chain_size_after: usize = all_entities.len();
             shared_entities_length.insert(&shared_entity, chain_size_after);
             // early stopping condition
             if chain_size_after > chain_size_before {
@@ -135,28 +135,29 @@ fn multihop_iter<'a>(mut entity_to_entity: HashMap<String, Vec<&'a str>>, mut sh
 }
 
 fn main() {
+    let now = Instant::now();
     let filename = &env::args().nth(1).expect("file_name not provided");
     let entity_col = &env::args().nth(2).expect("Missing index of entity column");
     let identity_col = &env::args().nth(3).expect("Missing index of identifier column");
 
     println!("Start storing csv data in vectors.");
-    let mut nodes_edges = load_mappings_from_csv(filename, entity_col, identity_col);
-    let mut vec_entities: Vec<String> = nodes_edges.0;
-    let mut vec_identifiers: Vec<String> = nodes_edges.1;
+    let nodes_edges = load_mappings_from_csv(filename, entity_col, identity_col);
+    let vec_entities: Vec<String> = nodes_edges.0;
+    let vec_identifiers: Vec<String> = nodes_edges.1;
 
-    println!("Start mapping identifier of entities");
+    println!("Calculate first hop");
     let mut entity_to_entity: HashMap<String, Vec<&str>> = HashMap::new();
-    let mut entity_to_identifiers: HashMap<String, Vec<&str>> = HashMap::new();
-    let mut identifier_to_entities: HashMap<String, Vec<&str>> = HashMap::new();
-    (entity_to_entity, entity_to_identifiers, identifier_to_entities) = first_hop(&vec_entities, &vec_identifiers);
+    entity_to_entity = first_hop(&vec_entities, &vec_identifiers);
 
-    println!("{:?}", entity_to_entity);
 
     // executing the first hop
     let mut any_chain_got_longer: bool = true;
     let mut shared_entities_length: HashMap<&str, usize>= HashMap::new();
     while any_chain_got_longer {
-        (entity_to_entity, shared_entities_length, any_chain_got_longer) = multihop_iter(entity_to_entity, shared_entities_length, &vec_entities, &vec_identifiers);
+        println!("Calculate iteration in multihop");
+        (entity_to_entity, shared_entities_length, any_chain_got_longer) = multihop_iter(entity_to_entity, shared_entities_length);
     }
-    println!("{:?}", entity_to_entity);
+    //println!("{:?}", entity_to_entity);
+    let elapsed = now.elapsed();
+    println!("Elapsed: {:.2?}", elapsed);
 }
