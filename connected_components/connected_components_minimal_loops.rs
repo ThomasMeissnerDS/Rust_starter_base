@@ -1,4 +1,4 @@
-use fnv::FnvHashMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
 use std::fs::File;
@@ -33,10 +33,10 @@ fn load_mappings_from_csv(filename: &str, entity_col: &str, identity_col: &str) 
     (vec_entities, vec_identifiers)
 }
 
-fn first_hop<'a>(vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>) -> FnvHashMap<&'a str, Vec<&'a str>> {
-    let mut entity_to_identifier: FnvHashMap<&str, Vec<&str>> = FnvHashMap::default();
-    let mut identifier_to_entity: FnvHashMap<&str, Vec<&str>> = FnvHashMap::default();
-    let mut entity_to_entity: FnvHashMap<&str, HashSet<&str>> = FnvHashMap::default(); // Use HashSet for deduplication
+fn first_hop<'a>(vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>) -> HashMap<&'a str, Vec<&'a str>> {
+    let mut entity_to_identifier: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut identifier_to_entity: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut entity_to_entity: HashMap<&str, HashSet<&str>> = HashMap::new(); // Use HashSet for deduplication
 
     for i in 0..vec_entities.len() {
         let entity_key = &vec_entities[i];
@@ -64,7 +64,7 @@ fn first_hop<'a>(vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>
     }
 
     // Convert HashSet back to Vec
-    let entity_to_entity: FnvHashMap<&str, Vec<&str>> = entity_to_entity
+    let entity_to_entity: HashMap<&str, Vec<&str>> = entity_to_entity
         .into_iter()
         .map(|(k, v)| (k, v.into_iter().collect()))
         .collect();
@@ -73,10 +73,10 @@ fn first_hop<'a>(vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>
 }
 
 fn multihop_iter<'a>(
-    mut entity_to_entity: FnvHashMap<&'a str, Vec<&'a str>>,
-    mut shared_entities_length: FnvHashMap<&'a str, usize>,
-) -> (FnvHashMap<&'a str, Vec<&'a str>>, FnvHashMap<&'a str, usize>, bool) {
-    let mut entity_to_entity_enhanced: FnvHashMap<&str, HashSet<&str>> = FnvHashMap::default();
+    mut entity_to_entity: HashMap<&'a str, Vec<&'a str>>,
+    mut shared_entities_length: HashMap<&'a str, usize>,
+) -> (HashMap<&'a str, Vec<&'a str>>, HashMap<&'a str, usize>, bool) {
+    let mut entity_to_entity_enhanced: HashMap<&str, HashSet<&str>> = HashMap::new();
     let mut any_chain_got_longer: bool = false;
 
     for (entity, shared_entities) in entity_to_entity.clone().into_iter() {
@@ -109,7 +109,7 @@ fn multihop_iter<'a>(
         }
     }
 
-    let entity_to_entity_enhanced: FnvHashMap<&str, Vec<&str>> = entity_to_entity_enhanced
+    let entity_to_entity_enhanced: HashMap<&str, Vec<&str>> = entity_to_entity_enhanced
         .into_iter()
         .map(|(k, v)| (k, v.into_iter().collect()))
         .collect();
@@ -141,7 +141,7 @@ fn main() {
 
     // executing the first hop
     let mut any_chain_got_longer: bool = true;
-    let mut shared_entities_length: FnvHashMap<&str, usize> = FnvHashMap::default();
+    let mut shared_entities_length: HashMap<&str, usize> = HashMap::new();
 
     while any_chain_got_longer {
         println!("Calculate iteration in multihop");

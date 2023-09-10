@@ -1,4 +1,4 @@
-use fnv::FnvHashMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
 use std::fs::File;
@@ -33,10 +33,10 @@ fn load_mappings_from_csv(filename: &str, entity_col: &str, identity_col: &str) 
     (vec_entities, vec_identifiers)
 }
 
-fn first_hop<'a>(vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>) -> FnvHashMap<&'a str, Vec<&'a str>> {
-    let mut entity_to_identifier: FnvHashMap<&str, Vec<&str>> = FnvHashMap::default();
-    let mut identifier_to_entity: FnvHashMap<&str, Vec<&str>> = FnvHashMap::default();
-    let mut entity_to_entity: FnvHashMap<&str, HashSet<&str>> = FnvHashMap::default(); // Use HashSet for deduplication
+fn first_hop<'a>(vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>) -> HashMap<&'a str, Vec<&'a str>> {
+    let mut entity_to_identifier: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut identifier_to_entity: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut entity_to_entity: HashMap<&str, HashSet<&str>> = HashMap::new(); // Use HashSet for deduplication
 
     for i in 0..vec_entities.len() {
         let entity_key = &vec_entities[i];
@@ -64,7 +64,7 @@ fn first_hop<'a>(vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>
     }
 
     // Convert HashSet back to Vec
-    let entity_to_entity: FnvHashMap<&str, Vec<&str>> = entity_to_entity
+    let entity_to_entity: HashMap<&str, Vec<&str>> = entity_to_entity
         .into_iter()
         .map(|(k, v)| (k, v.into_iter().collect()))
         .collect();
@@ -73,11 +73,13 @@ fn first_hop<'a>(vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>
 }
 
 fn multihop_iter<'a>(
-    mut entity_to_entity: FnvHashMap<&'a str, Vec<&'a str>>,
-    mut shared_entities_length: FnvHashMap<&'a str, usize>,
-) -> (FnvHashMap<&'a str, Vec<&'a str>>, FnvHashMap<&'a str, usize>, bool) {
-    let mut entity_to_entity_enhanced: FnvHashMap<&str, HashSet<&str>> = FnvHashMap::default();
+    mut entity_to_entity: HashMap<&'a str, Vec<&'a str>>,
+    mut shared_entities_length: HashMap<&'a str, usize>,
+    final_chains: &mut HashMap<&'a str, Vec<&'a str>>,
+) -> (HashMap<&'a str, Vec<&'a str>>, HashMap<&'a str, usize>, bool) {
+    let mut entity_to_entity_enhanced: HashMap<&str, HashSet<&str>> = HashMap::new();
     let mut any_chain_got_longer: bool = false;
+    let mut entities_to_remove: HashSet<&str> = HashSet::new();
 
     for (entity, shared_entities) in entity_to_entity.clone().into_iter() {
         let mut all_entities: HashSet<&str> = HashSet::new();
@@ -105,17 +107,25 @@ fn multihop_iter<'a>(
 
             if chain_size_after > chain_size_before {
                 any_chain_got_longer = true;
+            } else {
+                final_chains.insert(entity, entity_to_entity[entity].clone());
+                entities_to_remove.insert(entity);
             }
         }
     }
 
-    let entity_to_entity_enhanced: FnvHashMap<&str, Vec<&str>> = entity_to_entity_enhanced
-        .into_iter()
-        .map(|(k, v)| (k, v.into_iter().collect()))
-        .collect();
+    for &entity in &entities_to_remove {
+        entity_to_entity.remove(entity);
+        shared_entities_length.remove(entity);
+    }
 
-    (entity_to_entity_enhanced, shared_entities_length, any_chain_got_longer)
+    (
+        entity_to_entity, // Return the correct type
+        shared_entities_length,
+        any_chain_got_longer,
+    )
 }
+
 
 
 fn main() {
@@ -137,19 +147,20 @@ fn main() {
     let vec_identifiers: Vec<String> = nodes_edges.1;
 
     println!("Calculate first hop");
-    let mut entity_to_entity = first_hop(&vec_entities, &vec_identifiers);
+    let entity_to_entity = first_hop(&vec_entities, &vec_identifiers);
+    let any_chain_got_longer: bool = true;
+    let shared_entities_length: HashMap<&str, usize> = HashMap::new();
 
-    // executing the first hop
-    let mut any_chain_got_longer: bool = true;
-    let mut shared_entities_length: FnvHashMap<&str, usize> = FnvHashMap::default();
+    let mut final_chains: HashMap<&str, Vec<&str>> = HashMap::new(); // Create a data structure to store final chains
 
-    while any_chain_got_longer {
-        println!("Calculate iteration in multihop");
-        let result = multihop_iter(entity_to_entity.clone(), shared_entities_length.clone());
-        entity_to_entity = result.0;
-        shared_entities_length = result.1;
-        any_chain_got_longer = result.2;
-    }
+   while any_chain_got_longer {
+       println!("Calculate iteration in multihop");
+       let (entity_to_entity, shared_entities_length, any_chain_got_longer) = multihop_iter(
+           entity_to_entity.clone(), // Clone here
+           shared_entities_length.clone(), // Clone here
+           &mut final_chains,
+       );
+   }
 
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
