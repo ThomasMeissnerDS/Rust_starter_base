@@ -91,11 +91,15 @@ fn first_hop<'a>(vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>
     return (entity_to_entity, entity_to_identifier, identifier_to_entity)
 }
 
-fn multihop_iter<'a>(mut entity_to_entity: HashMap<String, Vec<&'a str>>, vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>) -> HashMap<String, Vec<&'a str>> {
+fn multihop_iter<'a>(mut entity_to_entity: HashMap<String, Vec<&'a str>>, mut shared_entities_length: HashMap<&'a str, usize>, vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>) -> (HashMap<String, Vec<&'a str>> , HashMap<&'a str, usize>, bool ){
     let mut entity_to_entity_enhanced: HashMap<String, Vec<&str>> = HashMap::new();
+    let mut any_chain_got_longer: bool = false;
     for (entity, mut shared_entities) in entity_to_entity.clone().into_iter() {
         let mut all_entities: Vec<&str> = vec![];
         for shared_entity in &mut *shared_entities {
+            let mut chain_size_before: usize = 0;
+            let mut chain_size_after: usize = 0;
+
             if let Some(entity_vec) = entity_to_entity.get_mut(&entity as &str) {
                 all_entities.append(entity_vec);
             }
@@ -114,9 +118,20 @@ fn multihop_iter<'a>(mut entity_to_entity: HashMap<String, Vec<&'a str>>, vec_en
             entity_to_entity_enhanced.insert(entity.clone(), all_entities.clone());
             entity_to_entity_enhanced.insert(shared_entity.to_string(), all_entities.clone());
 
+            // checking if a chain got longer and storing chain length
+            if let Some(chain_size) = shared_entities_length.get_mut(shared_entity) {
+                chain_size_before = *chain_size;
+            }
+            chain_size_after = all_entities.len();
+            shared_entities_length.insert(&shared_entity, chain_size_after);
+            // early stopping condition
+            if chain_size_after > chain_size_before {
+                any_chain_got_longer = true;
+            }
+
         }
     }
-    return entity_to_entity_enhanced
+    return (entity_to_entity_enhanced, shared_entities_length, any_chain_got_longer)
 }
 
 fn main() {
@@ -138,10 +153,10 @@ fn main() {
     println!("{:?}", entity_to_entity);
 
     // executing the first hop
-    let mut entity_to_entity_enhanced: HashMap<String, Vec<&str>> = HashMap::new();
-    entity_to_entity_enhanced = multihop_iter(entity_to_entity, &vec_entities, &vec_identifiers);
-    entity_to_entity = entity_to_entity_enhanced;
+    let mut any_chain_got_longer: bool = true;
+    let mut shared_entities_length: HashMap<&str, usize>= HashMap::new();
+    while any_chain_got_longer {
+        (entity_to_entity, shared_entities_length, any_chain_got_longer) = multihop_iter(entity_to_entity, shared_entities_length, &vec_entities, &vec_identifiers);
+    }
     println!("{:?}", entity_to_entity);
-
-
 }
