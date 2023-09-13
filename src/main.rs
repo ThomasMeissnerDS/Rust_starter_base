@@ -65,6 +65,7 @@ fn first_hop<'a>(vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>
     // Convert HashSet back to Vec
     let entity_to_entity: HashMap<&str, Vec<&str>> = entity_to_entity
         .into_iter()
+        .filter(|(_, v)| !v.is_empty()) // Filter out empty Vecs
         .map(|(k, v)| (k, v.into_iter().collect()))
         .collect();
 
