@@ -62,10 +62,14 @@ fn first_hop<'a>(vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>
         }
     }
 
-    // Convert HashSet back to Vec
+    // Filter and collect only non-empty sets where k is not the only value in v
     let entity_to_entity: HashMap<&str, Vec<&str>> = entity_to_entity
         .into_iter()
-        .filter(|(_, v)| !v.is_empty()) // Filter out empty Vecs
+        .filter(|(k, v)| {
+            !v.is_empty() &&
+            v.len() > 1 ||
+            v.iter().any(|&x| x != *k)
+        })
         .map(|(k, v)| (k, v.into_iter().collect()))
         .collect();
 
