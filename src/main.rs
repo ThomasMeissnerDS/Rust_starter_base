@@ -77,14 +77,14 @@ fn first_hop<'a>(vec_entities: &'a Vec<String>, vec_identifiers: &'a Vec<String>
 }
 
 fn multihop_iter<'a>(
-    mut entity_to_entity: HashMap<&'a str, Vec<&'a str>>,
+    entity_to_entity: HashMap<&'a str, Vec<&'a str>>,
     mut shared_entities_length: HashMap<&'a str, usize>,
     capacity: usize
 ) -> (HashMap<&'a str, Vec<&'a str>>, HashMap<&'a str, usize>, bool) {
     let mut entity_to_entity_enhanced: HashMap<&str, HashSet<&str>> = HashMap::with_capacity(capacity);
     let mut any_chain_got_longer: bool = false;
 
-    for (entity, shared_entities) in entity_to_entity.clone().into_iter() {
+    for (entity, shared_entities) in entity_to_entity.iter() {
         let mut all_entities: HashSet<&str> = HashSet::new();
 
         for shared_entity in shared_entities.iter() {
@@ -104,7 +104,7 @@ fn multihop_iter<'a>(
             entity_to_entity_enhanced.insert(entity, all_entities.clone());
             entity_to_entity_enhanced.insert(shared_entity, all_entities.clone());
 
-            let chain_size_before = shared_entities_length.get(shared_entity).cloned().unwrap_or(0);
+            let chain_size_before = shared_entities_length.get(shared_entity).copied().unwrap_or(0);
             let chain_size_after = all_entities.len();
             shared_entities_length.insert(shared_entity, chain_size_after);
 
@@ -151,7 +151,7 @@ fn main() {
 
     while any_chain_got_longer {
         println!("Calculate iteration in multihop");
-        let result = multihop_iter(entity_to_entity.clone(), shared_entities_length.clone(), capacity);
+        let result = multihop_iter(entity_to_entity, shared_entities_length, capacity);
         entity_to_entity = result.0;
         shared_entities_length = result.1;
         any_chain_got_longer = result.2;
@@ -161,4 +161,3 @@ fn main() {
     println!("Elapsed: {:.2?}", elapsed);
 
 }
-
